@@ -1,0 +1,93 @@
+﻿<Window x:Class="Secucode.TestPage" 
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Test Page" WindowState="Maximized" WindowStyle="None" ResizeMode="NoResize" KeyDown="OnKeyDownHandler" Background="#F5F5F5">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header: Timer + User ID + Strikes -->
+        <DockPanel Grid.Row="0" Margin="10" LastChildFill="False">
+            <!-- Timer and User ID -->
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                <TextBlock Name="TimerTextBlock" FontSize="28" FontWeight="Bold" Foreground="#D32F2F" Margin="10,0"/>
+                <TextBlock x:Name="UserIdTextBlock" FontSize="20" FontWeight="SemiBold" Foreground="#1976D2" Margin="30,5,0,0"/>
+            </StackPanel>
+            <TextBlock Name="DebugTextBlock" FontSize="14" Foreground="Red" Margin="10" />
+            <!-- Strikes -->
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <TextBlock x:Name="Strike1" Text="⚠" FontSize="28" FontWeight="Bold" Foreground="Gray" Margin="5"/>
+                <TextBlock x:Name="Strike2" Text="⚠" FontSize="28" FontWeight="Bold" Foreground="Gray" Margin="5"/>
+                <TextBlock x:Name="Strike3" Text="⚠" FontSize="28" FontWeight="Bold" Foreground="Gray" Margin="5"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- Question Display -->
+        <Border Grid.Row="1" Background="#E3F2FD" Padding="15" CornerRadius="10" Margin="20" Width="800" HorizontalAlignment="Center">
+            <TextBlock Name="QuestionTextBlock" FontSize="26" FontWeight="Bold" Foreground="#3F51B5" TextWrapping="Wrap" TextAlignment="Center"/>
+        </Border>
+
+        <!-- Code Editor + Output -->
+        <Grid Grid.Row="2" Margin="20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Margin="10">
+                <TextBlock Text="Input" FontSize="18" FontWeight="Bold" Foreground="#303F9F" Margin="0,0,0,5"/>
+
+                <!-- Code Editor Box -->
+                <Border Background="White" CornerRadius="10" BorderBrush="#3F51B5" BorderThickness="2" Padding="10">
+                    <TextBox Name="CodeEditor" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                 FontSize="16" Height="250" TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Stdin Input Box -->
+                <TextBlock Text="User Input" FontSize="14" FontWeight="SemiBold" Foreground="#3F51B5" Margin="0,10,0,5"/>
+                <Border Background="#FFFFFF" CornerRadius="8" BorderBrush="#3F51B5" BorderThickness="1" Padding="5">
+                    <TextBox Name="StdinInputBox" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                 FontSize="14" Height="80" TextWrapping="Wrap"/>
+                </Border>
+            </StackPanel>
+
+            <!-- Output Viewer -->
+            <StackPanel Grid.Column="1" Margin="10">
+                <TextBlock Text="Output" FontSize="18" FontWeight="Bold" Foreground="#303F9F" Margin="0,0,0,5"/>
+                <Border Background="#FAFAFA" CornerRadius="10" BorderBrush="#3F51B5" BorderThickness="2" Padding="10">
+                    <TextBox Name="OutputBox" AcceptsReturn="True" IsReadOnly="True" VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto" FontSize="16" Height="350" TextWrapping="Wrap"/>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Compiler + Action Buttons -->
+        <StackPanel Grid.Row="3" Margin="20" Orientation="Vertical" HorizontalAlignment="Center">
+            <!-- Compiler Selector -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+                <Label Content="Select Compiler:" VerticalAlignment="Center" FontSize="16" FontWeight="Bold" Margin="5"/>
+                <ComboBox Name="CompilerSelector" Width="200" FontSize="16" Margin="5" Background="White" ToolTip="Choose a language to compile your code.">
+                    <ComboBoxItem Content="Python" IsSelected="True"/>
+                    <ComboBoxItem Content="Java"/>
+                    <ComboBoxItem Content="C++"/>
+                    <ComboBoxItem Content="JavaScript"/>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Buttons -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+                <Button Name="TestCodeButton" Content="Test Code" Width="180" Height="50" FontSize="16"
+                        Background="#388E3C" Foreground="White" Cursor="Hand" Margin="10" Click="TestCodeButton_Click"
+                        ToolTip="Run your code and see the output."/>
+                <Button Name="SubmitCodeButton" Content="Submit Code" Width="180" Height="50" FontSize="16"
+                        Background="#D32F2F" Foreground="White" Cursor="Hand" Margin="10" Click="SubmitCodeButton_Click"
+                        ToolTip="Submit your solution for evaluation."/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Window>

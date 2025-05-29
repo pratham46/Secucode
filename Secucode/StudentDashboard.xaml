@@ -1,0 +1,105 @@
+﻿<Window x:Class="Secucode.StudentDashboard"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Student Dashboard" WindowState="Maximized" WindowStyle="None" ResizeMode="NoResize" Background="#F5F5F5">
+
+    <Grid Margin="40">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Title -->
+            <RowDefinition Height="*"/>
+            <!-- Exam List -->
+            <RowDefinition Height="Auto"/>
+            <!-- Logout -->
+        </Grid.RowDefinitions>
+
+        <!-- Title Section -->
+        <TextBlock Grid.Row="0" Text="📘 Upcoming Exams"
+                   FontSize="36" FontWeight="Bold" Foreground="#3F51B5"
+                   HorizontalAlignment="Center" Margin="0,0,0,20"/>
+
+        <!-- Main Exam List -->
+        <Grid Grid.Row="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="UpcomingExamsList">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="10" Padding="20" Background="#E3F2FD" CornerRadius="10"
+                                    BorderBrush="#3F51B5" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="Effect">
+                                            <Setter.Value>
+                                                <DropShadowEffect ShadowDepth="0" BlurRadius="4" Opacity="0.2"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="#BBDEFB"/>
+                                                <Setter Property="RenderTransform">
+                                                    <Setter.Value>
+                                                        <ScaleTransform ScaleX="1.02" ScaleY="1.02"/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+
+                                <StackPanel MouseLeftButtonDown="ExamsListBox_SelectionChanged">
+                                    <TextBlock Text="{Binding Name}" FontSize="22" FontWeight="Bold" Foreground="#1A237E"/>
+                                    <TextBlock Margin="0,5,0,0" FontSize="16">
+                                        <Run Text="📅 Date: " FontWeight="Bold"/>
+                                        <Run Text="{Binding Date}"/>
+                                    </TextBlock>
+                                    <TextBlock FontSize="16">
+                                        <Run Text="⏳ Time Limit: " FontWeight="Bold"/>
+                                        <Run Text="{Binding TimeLimit}"/>
+                                        <Run Text=" minutes"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Empty List Message -->
+            <TextBlock x:Name="NoExamsText" Text="No upcoming exams found." FontSize="20" FontStyle="Italic"
+                       Foreground="Gray" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Logout Button -->
+        <Button Grid.Row="2" Content="🚪 Logout"
+                Width="150" Height="50" FontSize="18" Cursor="Hand"
+                Background="#D32F2F" Foreground="White" BorderThickness="0"
+                HorizontalAlignment="Right" Margin="0,20,0,0"
+                Click="LogoutButton_Click">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="Background" Value="#D32F2F"/>
+                    <Setter Property="Foreground" Value="White"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="8">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#B71C1C"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+        </Button>
+    </Grid>
+</Window>

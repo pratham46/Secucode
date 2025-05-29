@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34728.123
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Secucode", "Secucode\Secucode.csproj", "{58B94E9F-9F07-4057-8932-87DF0B1F3F65}"
+EndProject
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Secucode_installer", "Secucode_installer\Secucode_installer.vdproj", "{C972DE72-A350-4094-B80F-B6084F0529F2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{58B94E9F-9F07-4057-8932-87DF0B1F3F65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{58B94E9F-9F07-4057-8932-87DF0B1F3F65}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{58B94E9F-9F07-4057-8932-87DF0B1F3F65}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{58B94E9F-9F07-4057-8932-87DF0B1F3F65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C972DE72-A350-4094-B80F-B6084F0529F2}.Debug|Any CPU.ActiveCfg = Debug
+		{C972DE72-A350-4094-B80F-B6084F0529F2}.Release|Any CPU.ActiveCfg = Release
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {68073888-CD22-4FEE-A262-A6EC3CB3B466}
+	EndGlobalSection
+EndGlobal
