@@ -20,8 +20,18 @@ namespace Secucode
         {
             string enteredPin = PinInputBox.Password;
 
-            // Verify entered PIN with hashed PIN
-            if (BCrypt.Net.BCrypt.Verify(enteredPin, hashedPin))
+            bool ok;
+            try
+            {
+                ok = BCrypt.Net.BCrypt.Verify(enteredPin, hashedPin);
+            }
+            catch (BCrypt.Net.SaltParseException)
+            {
+                MessageBox.Show("Your stored PIN is not a valid hash. Ask your teacher to reset it.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (ok)
             {
                 IsPinVerified = true;
                 MessageBox.Show("PIN verified successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);

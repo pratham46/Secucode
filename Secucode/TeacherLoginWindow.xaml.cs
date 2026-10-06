@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using MySql.Data.MySqlClient;
@@ -36,9 +36,9 @@ namespace Secucode
                 return;
             }
 
-            if (AuthenticateUser(username, password))
+            if (AuthenticateUser(username, password, out User? teacher))
             {
-                TeacherMainWindow teacherMainWindow = new TeacherMainWindow(username);
+                TeacherMainWindow teacherMainWindow = new TeacherMainWindow(teacher!);
                 teacherMainWindow.Show();
                 this.Close();
             }
@@ -48,30 +48,28 @@ namespace Secucode
             }
         }
 
-        private bool AuthenticateUser(string username, string password)
+        private bool AuthenticateUser(string username, string password, out User? teacher)
         {
-            string connectionString = "Server=localhost;Database=secucode;User Id=root;Password=root;";
-
+            teacher = null;
             try
             {
-                using (MySqlConnection conn = new MySqlConnection(connectionString))
+                using (MySqlConnection conn = Db.Open())
                 {
-                    conn.Open();
-
                     string query = @"
-                        SELECT password 
-                        FROM users 
+                        SELECT id, password
+                        FROM users
                         WHERE username = @username AND role = 'Teacher'";
 
                     using (MySqlCommand cmd = new MySqlCommand(query, conn))
                     {
                         cmd.Parameters.AddWithValue("@username", username);
-                        object result = cmd.ExecuteScalar();
-
-                        if (result != null)
+                        using (MySqlDataReader reader = cmd.ExecuteReader())
                         {
-                            string storedHashedPassword = result.ToString();
-                            return BCrypt.Net.BCrypt.Verify(password, storedHashedPassword);
+                            if (reader.Read() && BCrypt.Net.BCrypt.Verify(password, reader.GetString("password")))
+                            {
+                                teacher = new User { Id = reader.GetInt32("id"), Username = username, Role = "Teacher" };
+                                return true;
+                            }
                         }
                     }
                 }

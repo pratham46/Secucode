@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -48,7 +48,7 @@ namespace Secucode
                 }
 
                 string searchPattern = $"Exam_{currentTest.Id}_";
-                string matchedFolder = Directory.GetDirectories(baseFolder)
+                string? matchedFolder = Directory.GetDirectories(baseFolder)
                     .FirstOrDefault(folder => Path.GetFileName(folder).StartsWith(searchPattern));
 
                 if (!string.IsNullOrEmpty(matchedFolder))
@@ -82,12 +82,11 @@ namespace Secucode
                 {
                     Id = currentTest.Id,
                     Name = currentTest.Name,
-                    Date = currentTest.Date,
+                    ExamDate = currentTest.ExamDate ?? DateTime.Today,
                     TimeLimit = currentTest.TimeLimit
                 };
 
-                TestPage testPage = new TestPage(exam, -1); // -1 placeholder for studentId
-                testPage.Show();
+                new TestPage(exam, -1).ShowDialog(); // -1 = teacher preview (no proctoring, no submission)
             }
             else
             {

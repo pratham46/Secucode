@@ -1,4 +1,4 @@
-﻿using Emgu.CV;
+using Emgu.CV;
 using Emgu.CV.Structure;
 using System;
 using System.Diagnostics;
@@ -28,32 +28,47 @@ namespace Secucode
         {
             try
             {
-                using var capture = new VideoCapture(0, VideoCapture.API.DShow);
-                System.Threading.Thread.Sleep(500); // Warm-up time for webcam
-                using var frame = capture.QueryFrame();
-
-                if (frame == null || frame.IsEmpty)
-                {
-                    MessageBox.Show("No frame captured from webcam.");
-                    return;
-                }
-
-                var image = frame.ToImage<Bgr, byte>();
-                var gray = image.Convert<Gray, byte>();
-
                 string cascadePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "haarcascade_frontalface_default.xml");
                 if (!File.Exists(cascadePath))
                 {
                     MessageBox.Show("Face detection model not found.");
                     return;
                 }
+                using var faceDetector = new CascadeClassifier(cascadePath);
 
-                var faceDetector = new CascadeClassifier(cascadePath);
-                var faces = faceDetector.DetectMultiScale(gray, 1.1, 10, System.Drawing.Size.Empty);
+                using var capture = new VideoCapture(0, VideoCapture.API.DShow);
+                if (!capture.IsOpened)
+                {
+                    MessageBox.Show("Could not open the webcam.");
+                    return;
+                }
 
+                // First frames from a webcam are often dark while it adjusts; try for ~3 seconds.
+                Image<Bgr, byte>? image = null;
+                Rectangle[] faces = Array.Empty<Rectangle>();
+                for (int i = 0; i < 30 && faces.Length == 0; i++)
+                {
+                    using var frame = capture.QueryFrame();
+                    if (frame == null || frame.IsEmpty)
+                    {
+                        System.Threading.Thread.Sleep(100);
+                        continue;
+                    }
+                    image?.Dispose();
+                    image = frame.ToImage<Bgr, byte>();
+                    using var gray = image.Convert<Gray, byte>();
+                    faces = faceDetector.DetectMultiScale(gray, 1.1, 10, System.Drawing.Size.Empty);
+                }
+
+                if (image == null)
+                {
+                    MessageBox.Show("No frame captured from webcam.");
+                    return;
+                }
                 if (faces.Length == 0)
                 {
-                    MessageBox.Show("No face detected. Try again.");
+                    image.Dispose();
+                    MessageBox.Show("No face detected. Face the camera in good light and try again.");
                     return;
                 }
 
@@ -104,14 +119,9 @@ namespace Secucode
             if (confirm != MessageBoxResult.Yes)
                 return;
 
-            TestPage testPageWindow = new TestPage(currentExam, studentUserId);
-            testPageWindow.Show();
-
             var currentWindow = Window.GetWindow(this);
-            if (currentWindow != null)
-            {
-                currentWindow.Close();
-            }
+            new TestPage(currentExam, studentUserId).ShowDialog();
+            currentWindow?.Close();
         }
 
         private void BackButton_Click(object sender, RoutedEventArgs e)

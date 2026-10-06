@@ -1,776 +1,302 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Threading;
-using Amazon.S3;
-using Amazon.S3.Transfer;
 using Emgu.CV;
 using Emgu.CV.CvEnum;
+using Emgu.CV.Face;
 using Emgu.CV.Structure;
-using Microsoft.Win32;
+using Emgu.CV.Util;
 using MySql.Data.MySqlClient;
 using NAudio.Wave;
-using Python.Runtime;
-using Microsoft.Win32;
-
 
 namespace Secucode
 {
+    // Exam window. Every way out (submit button, timer, strikes, focus loss, minimize, any other close)
+    // ends in Window_Closing, which saves the submission exactly once.
     public partial class TestPage : Window
     {
 #if DEBUG
-        private readonly bool isDevelopmentMode = true;
+        private const bool IsDevelopmentMode = true;
 #else
-        private readonly bool isDevelopmentMode = false;
+        private const bool IsDevelopmentMode = false;
 #endif
 
-        private int windowFocusMissCount = 0;
         private const int MaxFocusMissesAllowed = 3;
+        private const int MaxAllowedFaceStrikes = 3;
+        private const int FaceCheckSeconds = 3;
+        private const int FaceDetectMinNeighbors = 5;
+        // ponytail: LBPH distance cutoff (lower = same person). Calibrate on real webcams/lighting; ~60-100 is typical.
+        private const double FaceMatchMaxDistance = 90;
 
-        private int studentUserId;
-        private Exam currentExam;
-        private Random random = new Random();
-        private readonly string connectionString = "Server=localhost;Database=secucode;User Id=root;Password=root;";
-        private List<Question> testQuestions;
-        private DispatcherTimer testTimer;
-        private DispatcherTimer autoSaveTimer;
+        private readonly Exam currentExam;
+        private readonly int studentUserId;
+        private bool IsStudent => studentUserId != -1;
+
+        private string questionText = "";
+        private string studentFolder = "";
+
+        private DispatcherTimer? testTimer;
+        private DispatcherTimer? autoSaveTimer;
+        private DispatcherTimer? faceMonitorTimer;
+        private DispatcherTimer? audioTimer;
         private TimeSpan timeLeft;
 
-        private WaveInEvent waveIn;
-        private WaveFileWriter writer;
-        private DispatcherTimer audioTimer;
+        private VideoCapture? faceCapture;
+        private CascadeClassifier? faceDetector;
+        private LBPHFaceRecognizer? faceRecognizer;
+        private int faceStrikes;
+        private int windowFocusMissCount;
 
-        private VideoCapture faceCapture;
-        private CascadeClassifier faceDetector;
-        private DispatcherTimer faceMonitorTimer;
-        private int faceMissCount = 0;
-        private const int MaxAllowedMisses = 3;
-        private const double FaceMatchThreshold = 60;
-        private Image<Gray, byte> referenceFace;
-        private string malpracticeLogDir;
-        private string tempSavePath;
-        private string audioLogDir;
-        private bool isAutoSubmitted = false;
-        private const int TimeoutInMilliseconds = 5000;
+        private WaveInEvent? waveIn;
+        private WaveFileWriter? audioWriter;
+        private readonly object audioLock = new();
 
-
-        private IntPtr _hookID = IntPtr.Zero;
-
-        private string GetStudentNameById(int userId)
-        {
-            try
-            {
-                using var conn = new MySqlConnection("Server=localhost;Database=secucode;User Id=root;Password=root;");
-                conn.Open();
-                string query = "SELECT username FROM users WHERE id = @userId";
-                using var cmd = new MySqlCommand(query, conn);
-                cmd.Parameters.AddWithValue("@userId", userId);
-                object result = cmd.ExecuteScalar();
-                if (result != null)
-                    return result.ToString();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Error fetching username: " + ex.Message);
-            }
-            return "Unknown";
-        }
-
-        private string SanitizeForFolder(string input)
-        {
-            return Regex.Replace(input, "[^a-zA-Z0-9_-]", "_");
-        }
+        private string? submitReason; // set once a submission has been triggered
+        private bool resourcesReleased;
 
         public TestPage(Exam exam, int userId)
         {
             InitializeComponent();
             currentExam = exam;
             studentUserId = userId;
+            Closing += Window_Closing;
 
-            if (currentExam.TimeLimit <= 0)
+            UserIdTextBlock.Text = IsStudent ? $"Student ID: {studentUserId}" : "Teacher Preview Mode";
+
+            if (!LoadRandomQuestion())
             {
-                MessageBox.Show("Test time limit is invalid or expired. Cannot start test.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                this.Close();
+                Abort("No questions available for this exam.");
                 return;
             }
 
-            UserIdTextBlock.Text = studentUserId == -1 ? "Teacher Preview Mode" : $"Student ID: {studentUserId}";
-            testQuestions = new List<Question>();
+            if (IsStudent)
+            {
+                studentFolder = BuildStudentFolder();
+                if (!StartFaceMonitoring())
+                {
+                    Abort("Webcam is not available. The exam cannot start without it.");
+                    return;
+                }
+                StartAudioMonitoring();
+                StartAutoSave();
+                SetupLockdown();
 
-            InitializePython();
-            LoadQuestionsFromDatabase();
+                Topmost = true;
+                Deactivated += Window_Deactivated;
+                StateChanged += Window_StateChanged;
+
+                // Block copy/cut/paste everywhere in the window (all shortcuts and context menus).
+                CommandManager.AddPreviewExecutedHandler(this, (s, e) =>
+                {
+                    if (e.Command == ApplicationCommands.Copy || e.Command == ApplicationCommands.Cut || e.Command == ApplicationCommands.Paste)
+                        e.Handled = true;
+                });
+                CodeEditor.AllowDrop = false;
+                StdinInputBox.AllowDrop = false;
+            }
 
             timeLeft = TimeSpan.FromMinutes(currentExam.TimeLimit);
+            TimerTextBlock.Text = timeLeft.ToString("c");
             StartTimer();
-
-            if (studentUserId != -1)
-            {
-                StartFaceMonitoring();
-                SetupLockdown();
-                StartAutoSave();
-                StartAudioMonitoring();
-
-                this.Topmost = true;
-                this.Deactivated += Window_Deactivated;
-                this.StateChanged += Window_StateChanged;
-
-                CodeEditor.PreviewKeyDown += CodeEditor_PreviewKeyDown;
-                CodeEditor.PreviewMouseRightButtonDown += (s, e) => { e.Handled = true; };
-            }
-
-            this.WindowState = WindowState.Maximized;
-            this.WindowStyle = WindowStyle.None;
-            this.ResizeMode = ResizeMode.NoResize;
         }
 
-
-
-        // Disable Copy Paste Cut
-        private void CodeEditor_PreviewKeyDown(object sender, KeyEventArgs e)
+        // Refuse to run; closes as soon as the window has loaded (Close() isn't allowed inside the constructor).
+        private void Abort(string message)
         {
-            if (studentUserId == -1) return;
-            if ((Keyboard.Modifiers == ModifierKeys.Control) && (e.Key == Key.C || e.Key == Key.V || e.Key == Key.X))
-            {
-                e.Handled = true;
-            }
+            submitReason = "aborted"; // nothing to submit
+            MessageBox.Show(message, "Cannot Start Test", MessageBoxButton.OK, MessageBoxImage.Error);
+            Loaded += (_, _) => Close();
         }
 
-        // Lockdown keyboard
-        private void SetupLockdown()
+        private void AutoSubmit(string reason)
         {
-            _hookID = SetHook(HookCallback);
+            if (submitReason != null) return;
+            submitReason = reason;
+            MessageBox.Show(this, reason + "\nYour test is being submitted.", "Security Alert", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
         }
 
-        private void RemoveLockdown()
-        {
-            UnhookWindowsHookEx(_hookID);
-        }
+        // ---------- Question / timer ----------
 
-        private static IntPtr SetHook(LowLevelKeyboardProc proc)
-        {
-            using (Process curProcess = Process.GetCurrentProcess())
-            using (ProcessModule curModule = curProcess.MainModule)
-            {
-                return SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(curModule.ModuleName), 0);
-            }
-        }
-
-        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
-
-        private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-        {
-            if (nCode >= 0)
-            {
-                int vkCode = Marshal.ReadInt32(lParam);
-                if (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN)
-                {
-                    if ((vkCode == 0x09 && (GetAsyncKeyState(0x12) & 0x8000) != 0) ||
-                        (vkCode == 0x1B && (GetAsyncKeyState(0x11) & 0x8000) != 0) ||
-                        (vkCode == 0x5B) || (vkCode == 0x5C) ||
-                        (vkCode == 0x73 && (GetAsyncKeyState(0x12) & 0x8000) != 0) ||
-                        (vkCode == 0x2E && (GetAsyncKeyState(0x11) & 0x8000) != 0)) // Ctrl+Alt+Del simulated detection
-                    {
-                        return (IntPtr)1;
-                    }
-                }
-            }
-            return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
-        }
-
-        private const int WH_KEYBOARD_LL = 13;
-        private const int WM_KEYDOWN = 0x0100;
-        private const int WM_SYSKEYDOWN = 0x0104;
-
-        [DllImport("user32.dll")]
-        private static extern short GetAsyncKeyState(int vKey);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr GetModuleHandle(string lpModuleName);
-
-        // Detect loss of focus
-        private void Window_Deactivated(object sender, EventArgs e)
-        {
-            if (isDevelopmentMode || studentUserId == -1) return;
-
-            windowFocusMissCount++;
-
-            if (windowFocusMissCount == 1)
-                MessageBox.Show("Warning: You switched away from the test window! (1/3)", "Security Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
-            else if (windowFocusMissCount == 2)
-                MessageBox.Show("Final Warning: If you switch again, your test will be auto-submitted! (2/3)", "Security Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
-            else if (windowFocusMissCount >= MaxFocusMissesAllowed)
-            {
-                MessageBox.Show("Window lost focus multiple times. Test auto-submitted.", "Security Alert", MessageBoxButton.OK, MessageBoxImage.Error);
-                SubmitCodeButton_Click(null, null);
-                this.Close();
-            }
-        }
-
-        // Detect minimized
-        private void Window_StateChanged(object sender, EventArgs e)
-        {
-            if (studentUserId == -1) return;
-            if (WindowState == WindowState.Minimized)
-            {
-                MessageBox.Show("Minimized window! Test auto-submitted.", "Security Alert", MessageBoxButton.OK, MessageBoxImage.Warning);
-                SubmitCodeButton_Click(null, null);
-            }
-        }
-
-
-        private void CaptureAndSaveScreenshot(string path)
+        private bool LoadRandomQuestion()
         {
             try
             {
-                using (Bitmap bitmap = new Bitmap((int)SystemParameters.VirtualScreenWidth, (int)SystemParameters.VirtualScreenHeight))
-                {
-                    using (Graphics g = Graphics.FromImage(bitmap))
-                    {
-                        g.CopyFromScreen((int)SystemParameters.VirtualScreenLeft, (int)SystemParameters.VirtualScreenTop, 0, 0, bitmap.Size);
-                    }
-                    bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Jpeg);
-                }
+                using MySqlConnection conn = Db.Open();
+                using MySqlCommand cmd = new MySqlCommand(
+                    "SELECT question_text FROM questions WHERE examination_id = @examId ORDER BY RAND() LIMIT 1", conn);
+                cmd.Parameters.AddWithValue("@examId", currentExam.Id);
+                questionText = cmd.ExecuteScalar() as string ?? "";
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("Screenshot capture failed: " + ex.Message);
+                MessageBox.Show("Error loading question: " + ex.Message);
             }
-        }
-
-        private void InitializePython()
-        {
-            string pythonHome = GetPythonInstallPath();
-            if (string.IsNullOrEmpty(pythonHome))
-            {
-                MessageBox.Show("Python installation not found.");
-                return;
-            }
-
-            string pythonDll = Path.Combine(pythonHome, "python39.dll"); // Update if using different version
-
-            Environment.SetEnvironmentVariable("PYTHONHOME", pythonHome);
-            Environment.SetEnvironmentVariable("PYTHONNET_PYDLL", pythonDll);
-
-            PythonEngine.Initialize();
-        }
-
-        private string GetPythonInstallPath()
-        {
-            string installPath = null;
-
-            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Python\PythonCore\3.9\InstallPath") ??
-                                      Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Python\PythonCore\3.9\InstallPath"))
-            {
-                if (key != null)
-                {
-                    installPath = key.GetValue("") as string;
-                }
-            }
-
-            return installPath;
+            QuestionTextBlock.Text = questionText;
+            return questionText.Length > 0;
         }
 
         private void StartTimer()
         {
-            testTimer = new DispatcherTimer
+            testTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            testTimer.Tick += (s, e) =>
             {
-                Interval = TimeSpan.FromSeconds(1)
+                timeLeft = timeLeft.Subtract(TimeSpan.FromSeconds(1));
+                TimerTextBlock.Text = timeLeft.ToString("c");
+                if (timeLeft <= TimeSpan.Zero)
+                {
+                    testTimer.Stop();
+                    if (IsStudent) AutoSubmit("Time limit reached.");
+                    else Close();
+                }
             };
-            testTimer.Tick += OnTimedEvent;
             testTimer.Start();
         }
 
-        private void OnTimedEvent(object sender, EventArgs e)
-        {
-            timeLeft = timeLeft.Subtract(TimeSpan.FromSeconds(1));
-            TimerTextBlock.Text = timeLeft.ToString("c");
+        // ---------- Running and submitting code ----------
 
-            if (timeLeft.TotalSeconds <= 0)
-            {
-                testTimer.Stop();
-                SubmitCodeButton_Click(null, null);
-            }
-        }
-
-        private void LoadQuestionsFromDatabase()
-        {
-            testQuestions.Clear();
-            using (MySqlConnection conn = new MySqlConnection(connectionString))
-            {
-                conn.Open();
-                string query = "SELECT question_text FROM questions WHERE examination_id = @examId";
-                using (MySqlCommand cmd = new MySqlCommand(query, conn))
-                {
-                    cmd.Parameters.AddWithValue("@examId", currentExam.Id);
-                    using (MySqlDataReader reader = cmd.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            testQuestions.Add(new Question { Text = reader.GetString("question_text") });
-                        }
-                    }
-                }
-            }
-            LoadRandomQuestion();
-        }
-
-        private void LoadRandomQuestion()
-        {
-            if (testQuestions.Count > 0)
-            {
-                int index = random.Next(testQuestions.Count);
-                QuestionTextBlock.Text = testQuestions[index].Text;
-            }
-            else
-            {
-                MessageBox.Show("No questions available.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
+        private string SelectedLanguage => (CompilerSelector.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Python";
 
         private async void TestCodeButton_Click(object sender, RoutedEventArgs e)
         {
-            string code = CodeEditor.Text;
-            string input = StdinInputBox.Text;
-            string selectedCompiler = ((ComboBoxItem)CompilerSelector.SelectedItem).Content.ToString();
-
-            var executor = new Secucode.CodeExecutor(); // ✅ Reference your CodeExecutor class
-
-            string output = selectedCompiler switch
-            {
-                "Python" => await executor.ExecutePythonCodeAsync(code, input),
-                "Java" => executor.ExecuteJavaCode(code, input),
-                "C++" => executor.ExecuteCppCode(code, input),
-                "JavaScript" => executor.ExecuteJavaScriptCode(code, input),
-                _ => "Unknown compiler selected."
-            };
-
-            OutputBox.Text = output; // ✅ This must match the name in your XAML
-        }
-
-
-        public async Task<string> ExecutePythonCodeAsync(string code, string input = "")
-        {
+            TestCodeButton.IsEnabled = false;
+            OutputBox.Text = "Running...";
             try
             {
-                using (Py.GIL())
-                {
-                    dynamic sys = Py.Import("sys");
-                    dynamic io = Py.Import("io");
-
-                    sys.stdin = io.StringIO(input);
-                    sys.stdout = io.StringIO();
-                    sys.stderr = io.StringIO();
-                    var scope = Py.CreateScope();
-
-                    var task = Task.Run(() =>
-                    {
-                        try
-                        {
-                            scope.Exec(code);
-                            return sys.stdout.getvalue().ToString();
-                        }
-                        catch (PythonException ex)
-                        {
-                            return $"Python Error: {ex.Message}\n{sys.stderr.getvalue()}";
-                        }
-                    });
-
-                    if (await Task.WhenAny(task, Task.Delay(TimeoutInMilliseconds)) == task)
-                        return task.Result;
-
-                    return "Execution Timeout: Python code took too long.";
-                }
+                OutputBox.Text = await CodeExecutor.RunAsync(SelectedLanguage, CodeEditor.Text, StdinInputBox.Text);
             }
-            catch (Exception ex)
+            finally
             {
-                return $"Execution error: {ex.Message}";
-            }
-        }
-
-        public string ExecuteJavaCode(string code, string input = "")
-        {
-            string javaFile = "UserCode.java";
-            File.WriteAllText(javaFile, code);
-
-            string compileOutput = ExecuteCommand("javac", javaFile);
-            if (!string.IsNullOrWhiteSpace(compileOutput))
-                return $"Java Compilation Error:\n{compileOutput}";
-
-            return ExecuteCommand("java", "-cp . UserCode", input);
-        }
-
-        public string ExecuteCppCode(string code, string input = "")
-        {
-            string cppFile = "UserCode.cpp";
-            string exeFile = "UserCode.exe";
-            File.WriteAllText(cppFile, code);
-
-            string compileOutput = ExecuteCommand("g++", $"{cppFile} -o {exeFile}");
-            if (!string.IsNullOrWhiteSpace(compileOutput))
-                return $"C++ Compilation Error:\n{compileOutput}";
-
-            return ExecuteCommand(exeFile, "", input);
-        }
-
-        public string ExecuteJavaScriptCode(string code, string input = "")
-        {
-            string jsFile = "UserCode.js";
-            File.WriteAllText(jsFile, code);
-            return ExecuteCommand("node", jsFile, input);
-        }
-
-
-
-        private string ExecuteCommand(string command, string args, string input = "")
-        {
-            try
-            {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = command,
-                    Arguments = args,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using Process proc = new Process { StartInfo = psi };
-                proc.Start();
-
-                // Feed user input
-                if (!string.IsNullOrWhiteSpace(input))
-                {
-                    using StreamWriter writer = proc.StandardInput;
-                    writer.Write(input);
-                }
-
-                // Wait with timeout
-                if (!proc.WaitForExit(TimeoutInMilliseconds))
-                {
-                    proc.Kill();
-                    return "Error: Execution timed out. Possible missing input or infinite loop.";
-                }
-
-                string output = proc.StandardOutput.ReadToEnd();
-                string error = proc.StandardError.ReadToEnd();
-
-                return string.IsNullOrWhiteSpace(error) ? output : $"Error:\n{error}";
-            }
-            catch (Exception ex)
-            {
-                return $"Execution failed: {ex.Message}";
+                TestCodeButton.IsEnabled = true;
             }
         }
 
         private void SubmitCodeButton_Click(object sender, RoutedEventArgs e)
         {
+            if (IsStudent)
+            {
+                if (MessageBox.Show(this, "Submit your code now? You cannot change it afterwards.", "Submit",
+                        MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                    return;
+                submitReason ??= "Manually submitted by student.";
+            }
+            Close();
+        }
+
+        private void Window_Closing(object? sender, CancelEventArgs e)
+        {
+            if (IsStudent && submitReason != "aborted")
+            {
+                // Any close we didn't initiate (e.g. a key combo the hook missed) still submits.
+                submitReason ??= "Test window was closed.";
+                StopTimers();
+                SaveSubmission(submitReason);
+            }
+            ReleaseResources();
+        }
+
+        private void SaveSubmission(string reason)
+        {
+            string extension = SelectedLanguage switch
+            {
+                "Python" => ".py",
+                "Java" => ".java",
+                "C++" => ".cpp",
+                "JavaScript" => ".js",
+                _ => ".txt"
+            };
+            string code = CodeEditor.Text;
+            string submissionFolder = Path.Combine(studentFolder, "Submissions");
+            string codeFileName = $"student_{studentUserId}_{currentExam.Id}{extension}";
+
+            // Disk first: it holds the evidence and doesn't depend on the DB being reachable.
             try
             {
-                if (studentUserId == -1)
-                {
-                    MessageBox.Show("Submission skipped for teacher preview mode.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-                    this.Close();
-                    return;
-                }
-                if (studentUserId <= 0)
-                {
-                    MessageBox.Show("Invalid student user ID.");
-                    return;
-                }
-
-                string code = CodeEditor.Text;
-
-                string selectedCompiler = (CompilerSelector.SelectedItem as ComboBoxItem)?.Content?.ToString()?.ToLower();
-                string extension = selectedCompiler switch
-                {
-                    "python" => ".py",
-                    "java" => ".java",
-                    "c++" => ".cpp",
-                    "javascript" => ".js",
-                    _ => ".txt"
-                };
-
-                // Fetch student name and sanitize folder names
-                string studentName = GetStudentNameById(studentUserId);
-                string examNameSanitized = SanitizeForFolder(currentExam.Name);
-                string studentNameSanitized = SanitizeForFolder(studentName);
-
-                // Folder Structure: /SubmittedCodes/Exam_{examId}_{examName}/Student_{userId}_{studentName}/Submissions & Malpractice
-                string baseFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SubmittedCodes");
-                string examFolder = Path.Combine(baseFolder, $"Exam_{currentExam.Id}_{examNameSanitized}");
-                string studentFolder = Path.Combine(examFolder, $"Student_{studentUserId}_{studentNameSanitized}");
-                string submissionFolder = Path.Combine(studentFolder, "Submissions");
-                string malpracticeFolder = Path.Combine(studentFolder, "Malpractice");
-
                 Directory.CreateDirectory(submissionFolder);
-                Directory.CreateDirectory(malpracticeFolder);
-
-                // Save Code
-                string codeFileName = $"student_{studentUserId}_{currentExam.Id}{extension}";
-                string codeFilePath = Path.Combine(submissionFolder, codeFileName);
-                File.WriteAllText(codeFilePath, code);
-
-                // Save Webcam Capture
-                if (faceCapture != null && faceCapture.Ptr != IntPtr.Zero)
-                {
-                    using Mat frame = faceCapture.QueryFrame();
-                    if (frame != null && !frame.IsEmpty)
-                    {
-                        var img = frame.ToImage<Bgr, byte>();
-                        string facePath = Path.Combine(submissionFolder, "final_face.jpg");
-                        img.ToBitmap().Save(facePath);
-                    }
-                }
-
-                // Save Desktop Screenshot
-                try
-                {
-                    var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
-                    using Bitmap bmp = new Bitmap(bounds.Width, bounds.Height);
-                    using Graphics g = Graphics.FromImage(bmp);
-                    g.CopyFromScreen(System.Drawing.Point.Empty, System.Drawing.Point.Empty, bounds.Size);
-                    string screenshotPath = Path.Combine(submissionFolder, "desktop_screenshot.jpg");
-                    bmp.Save(screenshotPath, System.Drawing.Imaging.ImageFormat.Jpeg);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine("Screenshot capture failed: " + ex.Message);
-                }
-
-                // Save Reason (why submission happened)
-                string reasonPath = Path.Combine(submissionFolder, "reason.txt");
-                string reasonText = isAutoSubmitted
-                    ? $"Test auto-submitted at {DateTime.Now:G} due to malpractice or window focus loss."
-                    : $"Test manually submitted by student at {DateTime.Now:G}.";
-                File.WriteAllText(reasonPath, reasonText);
-
-                MessageBox.Show($"✅ Submission Saved Successfully!\n\nSaved as: {codeFileName}");
-
-                // Clean shutdown (stop all monitoring systems)
-                StopEverything();
-                this.Close();
+                File.WriteAllText(Path.Combine(submissionFolder, codeFileName), code);
+                File.WriteAllText(Path.Combine(submissionFolder, "reason.txt"), $"{DateTime.Now:G}: {reason}");
+                SaveWebcamFrame(Path.Combine(submissionFolder, "final_face.jpg"));
+                CaptureScreenshot(Path.Combine(submissionFolder, "desktop_screenshot.jpg"));
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error saving submission: {ex.Message}");
+                MessageBox.Show(this, "Error saving submission files: " + ex.Message);
+            }
+
+            try
+            {
+                using MySqlConnection conn = Db.Open();
+                using MySqlCommand cmd = new MySqlCommand(@"
+                    INSERT INTO submissions (examination_id, user_id, question_text, language, code, reason)
+                    VALUES (@examId, @userId, @question, @language, @code, @reason)", conn);
+                cmd.Parameters.AddWithValue("@examId", currentExam.Id);
+                cmd.Parameters.AddWithValue("@userId", studentUserId);
+                cmd.Parameters.AddWithValue("@question", questionText);
+                cmd.Parameters.AddWithValue("@language", SelectedLanguage);
+                cmd.Parameters.AddWithValue("@code", code);
+                cmd.Parameters.AddWithValue("@reason", reason.Length > 255 ? reason[..255] : reason);
+                cmd.ExecuteNonQuery();
+                MessageBox.Show(this, $"Submission saved.\n\nReason: {reason}", "Submitted", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Your code was saved locally as {codeFileName}, but recording it in the database failed:\n{ex.Message}",
+                    "Submission Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
-
 
         private void StartAutoSave()
         {
-            tempSavePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TempCodes", $"temp_{studentUserId}_{currentExam.Id}.txt");
-            Directory.CreateDirectory(Path.GetDirectoryName(tempSavePath));
+            string tempSavePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TempCodes", $"temp_{studentUserId}_{currentExam.Id}.txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(tempSavePath)!);
             autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-            autoSaveTimer.Tick += (s, e) => File.WriteAllText(tempSavePath, CodeEditor.Text);
+            autoSaveTimer.Tick += (s, e) =>
+            {
+                try { File.WriteAllText(tempSavePath, CodeEditor.Text); }
+                catch (IOException ex) { Debug.WriteLine("Auto-save failed: " + ex.Message); }
+            };
             autoSaveTimer.Start();
         }
 
-        private void StartAudioMonitoring()
+        // ---------- Evidence folder ----------
+
+        // SubmittedCodes/Exam_{id}_{name}/Student_{id}_{name}/{Submissions,Malpractice}
+        private string BuildStudentFolder()
         {
-            // Organize audio files under the student's "Submissions" folder
-            string studentName = GetStudentNameById(studentUserId);
-            string examNameSanitized = SanitizeForFolder(currentExam.Name);
-            string studentNameSanitized = SanitizeForFolder(studentName);
-
-            string baseFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SubmittedCodes");
-            string examFolder = Path.Combine(baseFolder, $"Exam_{currentExam.Id}_{examNameSanitized}");
-            string studentFolder = Path.Combine(examFolder, $"Student_{studentUserId}_{studentNameSanitized}");
-            string submissionFolder = Path.Combine(studentFolder, "Submissions");
-
-            Directory.CreateDirectory(submissionFolder);
-
-            // Set audio recording path inside Submissions
-            audioLogDir = submissionFolder;
-
-            waveIn = new WaveInEvent
-            {
-                WaveFormat = new WaveFormat(16000, 1)
-            };
-
-            waveIn.DataAvailable += (s, a) =>
-            {
-                if (writer != null)
-                    writer.Write(a.Buffer, 0, a.BytesRecorded);
-            };
-
-            waveIn.StartRecording();
-
-            audioTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
-            audioTimer.Tick += (s, e) =>
-            {
-                if (writer != null)
-                {
-                    writer.Dispose();
-                    writer = null;
-                }
-
-                string newFile = Path.Combine(audioLogDir, $"audio_{DateTime.Now:HHmmss}.wav");
-                writer = new WaveFileWriter(newFile, waveIn.WaveFormat);
-            };
-            audioTimer.Start();
-
-            // Start first audio file immediately
-            string firstFile = Path.Combine(audioLogDir, $"audio_{DateTime.Now:HHmmss}.wav");
-            writer = new WaveFileWriter(firstFile, waveIn.WaveFormat);
-        }
-
-
-        private void StopEverything()
-        {
-            testTimer?.Stop();
-            autoSaveTimer?.Stop();
-            faceMonitorTimer?.Stop();
-            faceCapture?.Dispose();
-            waveIn?.StopRecording();
-            writer?.Dispose();
-            audioTimer?.Stop();
-            ShutdownPython();
-        }
-
-        private void StartFaceMonitoring()
-        {
+            string studentName = "Unknown";
             try
             {
-                faceCapture = new VideoCapture(0, VideoCapture.API.DShow);
-                faceCapture.Set(CapProp.FrameWidth, 320);
-                faceCapture.Set(CapProp.FrameHeight, 240);
-
-                if (!faceCapture.IsOpened)
-                    return;
-
-                string cascadeFileName = "haarcascade_frontalface_default.xml";
-                string cascadePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, cascadeFileName);
-
-                if (!File.Exists(cascadePath))
-                    return;
-
-                faceDetector = new CascadeClassifier(cascadePath);
-
-                string refPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CapturedFaces", $"student_{studentUserId}.png");
-
-                if (File.Exists(refPath))
-                {
-                    var img = new Image<Bgr, byte>(refPath).Convert<Gray, byte>();
-                    var faces = faceDetector.DetectMultiScale(img);
-                    if (faces.Length > 0)
-                        referenceFace = img.Copy(faces[0]).Resize(100, 100, Inter.Linear);
-                }
-
-                faceMonitorTimer = new DispatcherTimer
-                {
-                    Interval = TimeSpan.FromSeconds(3)
-                };
-                faceMonitorTimer.Tick += MonitorFacePresence;
-                faceMonitorTimer.Start();
+                using MySqlConnection conn = Db.Open();
+                using MySqlCommand cmd = new MySqlCommand("SELECT username FROM users WHERE id = @userId", conn);
+                cmd.Parameters.AddWithValue("@userId", studentUserId);
+                studentName = cmd.ExecuteScalar() as string ?? studentName;
             }
-            catch
+            catch (Exception ex)
             {
-                // Silent fail to avoid runtime crash if any unexpected error occurs
+                Debug.WriteLine("Error fetching username: " + ex.Message);
             }
+
+            static string Sanitize(string s) => Regex.Replace(s, "[^a-zA-Z0-9_-]", "_");
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SubmittedCodes",
+                $"Exam_{currentExam.Id}_{Sanitize(currentExam.Name)}",
+                $"Student_{studentUserId}_{Sanitize(studentName)}");
         }
-
-        private void MonitorFacePresence(object sender, EventArgs e)
-        {
-            try
-            {
-                if (faceCapture == null || faceCapture.Ptr == IntPtr.Zero || !faceCapture.IsOpened)
-                    return;
-
-                using Mat frame = new Mat();
-                if (!faceCapture.Read(frame) || frame.IsEmpty)
-                    return;
-
-                var image = frame.ToImage<Bgr, byte>();
-                var grayLiveImage = image.Convert<Gray, byte>();
-
-                if (referenceFace == null)
-                    return;
-
-                var liveFaces = faceDetector.DetectMultiScale(grayLiveImage, 1.1, 10);
-
-                if (liveFaces.Length == 0)
-                {
-                    faceMissCount++;
-                    SaveMalpracticeImage(image, "missing_face");
-                    UpdateStrikeDisplay(faceMissCount);
-                }
-                else
-                {
-                    var liveFace = grayLiveImage.Copy(liveFaces[0]).Resize(100, 100, Inter.Linear);
-                    var diff = referenceFace.AbsDiff(liveFace);
-                    double similarity = CvInvoke.Mean(diff).V0;
-
-                    if (similarity <= FaceMatchThreshold)
-                    {
-                        faceMissCount = 0;
-                    }
-                    else
-                    {
-                        faceMissCount++;
-                        SaveMalpracticeImage(image, "unauthorized_face");
-                    }
-
-                    UpdateStrikeDisplay(faceMissCount);
-                }
-
-                if (faceMissCount >= MaxAllowedMisses)
-                {
-                    faceMonitorTimer?.Stop();
-                    MessageBox.Show("❌ Auto-submitting test due to multiple face detection violations.", "Security Alert", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    isAutoSubmitted = true;
-                    SubmitCodeButton_Click(null, null);
-                    this.Close();
-                }
-            }
-            catch
-            {
-                // Silent fail-safe
-            }
-        }
-
-
 
         private void SaveMalpracticeImage(Image<Bgr, byte> image, string reason)
         {
             try
             {
-                // Organized malpractice path
-                string studentName = GetStudentNameById(studentUserId);
-                string examNameSanitized = SanitizeForFolder(currentExam.Name);
-                string studentNameSanitized = SanitizeForFolder(studentName);
-                string baseFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SubmittedCodes");
-                string examFolder = Path.Combine(baseFolder, $"Exam_{currentExam.Id}_{examNameSanitized}");
-                string studentFolder = Path.Combine(examFolder, $"Student_{studentUserId}_{studentNameSanitized}");
-                string malpracticeFolder = Path.Combine(studentFolder, "Malpractice");
-
-                Directory.CreateDirectory(malpracticeFolder);
-
-                string timestamp = DateTime.Now.ToString("HHmmss");
-                string filename = Path.Combine(malpracticeFolder, $"{reason}_{timestamp}.jpg");
-                image.ToBitmap().Save(filename);
-                Debug.WriteLine($"Malpractice image saved: {filename}");
+                string dir = Path.Combine(studentFolder, "Malpractice");
+                Directory.CreateDirectory(dir);
+                image.ToBitmap().Save(Path.Combine(dir, $"{reason}_{DateTime.Now:HHmmss}.jpg"));
             }
             catch (Exception ex)
             {
@@ -778,56 +304,314 @@ namespace Secucode
             }
         }
 
+        private void SaveWebcamFrame(string path)
+        {
+            if (faceCapture == null || !faceCapture.IsOpened) return;
+            using Mat frame = new Mat();
+            if (faceCapture.Read(frame) && !frame.IsEmpty)
+                frame.ToImage<Bgr, byte>().ToBitmap().Save(path);
+        }
+
+        private static void CaptureScreenshot(string path)
+        {
+            try
+            {
+                using var bitmap = new Bitmap((int)SystemParameters.VirtualScreenWidth, (int)SystemParameters.VirtualScreenHeight);
+                using (Graphics g = Graphics.FromImage(bitmap))
+                    g.CopyFromScreen((int)SystemParameters.VirtualScreenLeft, (int)SystemParameters.VirtualScreenTop, 0, 0, bitmap.Size);
+                bitmap.Save(path, System.Drawing.Imaging.ImageFormat.Jpeg);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Screenshot capture failed: " + ex.Message);
+            }
+        }
+
+        // ---------- Face monitoring ----------
+
+        private bool StartFaceMonitoring()
+        {
+            try
+            {
+                string cascadePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "haarcascade_frontalface_default.xml");
+                if (!File.Exists(cascadePath))
+                    return false;
+                faceDetector = new CascadeClassifier(cascadePath);
+
+                faceCapture = new VideoCapture(0, VideoCapture.API.DShow);
+                if (!faceCapture.IsOpened)
+                    return false;
+                faceCapture.Set(CapProp.FrameWidth, 320);
+                faceCapture.Set(CapProp.FrameHeight, 240);
+
+                // The saved reference is already a face crop (StudentTestDetailsPage), so use it as-is.
+                string refPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CapturedFaces", $"student_{studentUserId}.png");
+                if (File.Exists(refPath))
+                {
+                    using var reference = PrepareFace(new Image<Bgr, byte>(refPath).Convert<Gray, byte>());
+                    faceRecognizer = new LBPHFaceRecognizer();
+                    using var images = new VectorOfMat(reference.Mat);
+                    using var labels = new VectorOfInt(new[] { 1 });
+                    faceRecognizer.Train(images, labels);
+                }
+                // else: presence-only monitoring
+
+                faceMonitorTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(FaceCheckSeconds) };
+                faceMonitorTimer.Tick += MonitorFacePresence;
+                faceMonitorTimer.Start();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Face monitoring failed to start: " + ex.Message);
+                return false;
+            }
+        }
+
+        private static Image<Gray, byte> PrepareFace(Image<Gray, byte> face)
+        {
+            var resized = face.Resize(100, 100, Inter.Linear);
+            resized._EqualizeHist(); // reduces sensitivity to lighting changes
+            return resized;
+        }
+
+        private void MonitorFacePresence(object? sender, EventArgs e)
+        {
+            if (submitReason != null || faceCapture == null || faceDetector == null)
+                return;
+
+            try
+            {
+                using Mat frame = new Mat();
+                if (!faceCapture.Read(frame) || frame.IsEmpty)
+                    return;
+
+                using var image = frame.ToImage<Bgr, byte>();
+                using var gray = image.Convert<Gray, byte>();
+                var faces = faceDetector.DetectMultiScale(gray, 1.1, FaceDetectMinNeighbors);
+
+                string? violation = null;
+                if (faces.Length == 0)
+                    violation = "missing_face";
+                else if (faces.Length > 1)
+                    violation = "multiple_faces";
+                else if (faceRecognizer != null)
+                {
+                    using var live = PrepareFace(gray.Copy(faces[0]));
+                    if (faceRecognizer.Predict(live).Distance > FaceMatchMaxDistance)
+                        violation = "unauthorized_face";
+                }
+
+                if (violation == null)
+                {
+                    faceStrikes = 0; // strikes count consecutive failed checks
+                }
+                else
+                {
+                    faceStrikes++;
+                    SaveMalpracticeImage(image, violation);
+                }
+                UpdateStrikeDisplay(faceStrikes);
+
+                if (faceStrikes >= MaxAllowedFaceStrikes)
+                    AutoSubmit($"Face check failed {MaxAllowedFaceStrikes} times in a row ({violation}).");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Face check error: " + ex.Message);
+            }
+        }
 
         private void UpdateStrikeDisplay(int count)
         {
-            Debug.WriteLine($"➡ Updating strike display with count: {count}");
+            var active = System.Windows.Media.Brushes.Red;
+            var inactive = System.Windows.Media.Brushes.Gray;
+            Strike1.Foreground = count >= 1 ? active : inactive;
+            Strike2.Foreground = count >= 2 ? active : inactive;
+            Strike3.Foreground = count >= 3 ? active : inactive;
+        }
 
-            Dispatcher.Invoke(() =>
+        // ---------- Audio ----------
+
+        private void StartAudioMonitoring()
+        {
+            string dir = Path.Combine(studentFolder, "Submissions");
+            Directory.CreateDirectory(dir);
+
+            try
             {
-                try
+                waveIn = new WaveInEvent { WaveFormat = new WaveFormat(16000, 1) };
+                waveIn.DataAvailable += (s, a) =>
                 {
-                    var active = System.Windows.Media.Brushes.Red;
-                    var inactive = System.Windows.Media.Brushes.Gray;
+                    lock (audioLock) audioWriter?.Write(a.Buffer, 0, a.BytesRecorded);
+                };
 
-                    if (Strike1 == null || Strike2 == null || Strike3 == null)
+                void Rotate()
+                {
+                    lock (audioLock)
                     {
-                        Debug.WriteLine("❌ One or more Strike elements are null. Cannot update.");
-                        return;
+                        audioWriter?.Dispose();
+                        audioWriter = new WaveFileWriter(Path.Combine(dir, $"audio_{DateTime.Now:HHmmss}.wav"), waveIn.WaveFormat);
                     }
-
-                    Debug.WriteLine("✅ Strike elements found. Applying colors...");
-
-                    Strike1.Foreground = count >= 1 ? active : inactive;
-                    Strike2.Foreground = count >= 2 ? active : inactive;
-                    Strike3.Foreground = count >= 3 ? active : inactive;
-
-                    Debug.WriteLine("✅ Strike display updated.");
                 }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"⚠ UI update failed: {ex.Message}");
-                }
+
+                Rotate();
+                waveIn.StartRecording();
+
+                // New file every 3 minutes so a crash loses at most one chunk.
+                audioTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
+                audioTimer.Tick += (s, e) => Rotate();
+                audioTimer.Start();
+            }
+            catch (Exception ex)
+            {
+                // No microphone: record that fact instead of blocking the exam.
+                Directory.CreateDirectory(Path.Combine(studentFolder, "Malpractice"));
+                File.WriteAllText(Path.Combine(studentFolder, "Malpractice", "audio_unavailable.txt"), $"{DateTime.Now:G}: {ex.Message}");
+                waveIn?.Dispose();
+                waveIn = null;
+            }
+        }
+
+        // ---------- Window focus / state ----------
+
+        private void Window_Deactivated(object? sender, EventArgs e)
+        {
+            if (IsDevelopmentMode || submitReason != null) return;
+
+            // Let activation settle, then only count it if focus went to another process
+            // (our own dialogs, like the submit confirmation, also deactivate this window).
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+            {
+                if (submitReason != null || IsActive || ForegroundIsOurProcess()) return;
+                RegisterFocusMiss();
             });
         }
 
-
-        private void Window_Closing(object sender, CancelEventArgs e)
+        private static bool ForegroundIsOurProcess()
         {
-            ShutdownPython();
-            faceMonitorTimer?.Stop();
-            faceCapture?.Dispose();
+            GetWindowThreadProcessId(GetForegroundWindow(), out uint pid);
+            return pid == (uint)Environment.ProcessId;
         }
 
-        private void ShutdownPython()
+        private void RegisterFocusMiss()
         {
-            PythonEngine.Shutdown();
+            windowFocusMissCount++;
+            if (windowFocusMissCount >= MaxFocusMissesAllowed)
+                AutoSubmit("Test window lost focus too many times.");
+            else
+                MessageBox.Show(this, $"Warning: you switched away from the test window! ({windowFocusMissCount}/{MaxFocusMissesAllowed})\n" +
+                                      "Reaching the limit submits your test.", "Security Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+
+        private void Window_StateChanged(object? sender, EventArgs e)
+        {
+            if (WindowState == WindowState.Minimized)
+                AutoSubmit("Test window was minimized.");
         }
 
         private void OnKeyDownHandler(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Escape)
-                this.Close();
+            if (e.Key == Key.Escape && !IsStudent) // Escape only exits teacher preview
+                Close();
         }
+
+        // ---------- Cleanup ----------
+
+        private void StopTimers()
+        {
+            testTimer?.Stop();
+            autoSaveTimer?.Stop();
+            faceMonitorTimer?.Stop();
+            audioTimer?.Stop();
+        }
+
+        private void ReleaseResources()
+        {
+            if (resourcesReleased) return;
+            resourcesReleased = true;
+
+            StopTimers();
+            RemoveLockdown();
+            faceCapture?.Dispose();
+            faceDetector?.Dispose();
+            faceRecognizer?.Dispose();
+            waveIn?.StopRecording();
+            waveIn?.Dispose();
+            lock (audioLock)
+            {
+                audioWriter?.Dispose();
+                audioWriter = null;
+            }
+        }
+
+        // ---------- Keyboard lockdown (low-level hook) ----------
+
+        // Kept in a static field so the GC can't collect the delegate while Windows still calls it.
+        private static readonly LowLevelKeyboardProc HookProc = HookCallback;
+        private IntPtr hookId = IntPtr.Zero;
+
+        private void SetupLockdown()
+        {
+            using Process curProcess = Process.GetCurrentProcess();
+            using ProcessModule curModule = curProcess.MainModule!;
+            hookId = SetWindowsHookEx(WH_KEYBOARD_LL, HookProc, GetModuleHandle(curModule.ModuleName), 0);
+        }
+
+        private void RemoveLockdown()
+        {
+            if (hookId == IntPtr.Zero) return;
+            UnhookWindowsHookEx(hookId);
+            hookId = IntPtr.Zero;
+        }
+
+        // Swallows Alt+Tab, Alt+Esc, Ctrl+Esc, Win keys, Alt+F4.
+        // Ctrl+Alt+Del cannot be blocked by any app; focus loss from it is caught by Window_Deactivated.
+        private static IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && (wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN))
+            {
+                int vkCode = Marshal.ReadInt32(lParam);
+                bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+                bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+
+                if ((vkCode == VK_TAB && alt) ||
+                    (vkCode == VK_ESCAPE && (alt || ctrl)) ||
+                    vkCode == VK_LWIN || vkCode == VK_RWIN ||
+                    (vkCode == VK_F4 && alt))
+                {
+                    return (IntPtr)1;
+                }
+            }
+            return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
+        }
+
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        private const int WH_KEYBOARD_LL = 13;
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_SYSKEYDOWN = 0x0104;
+        private const int VK_TAB = 0x09, VK_ESCAPE = 0x1B, VK_F4 = 0x73, VK_LWIN = 0x5B, VK_RWIN = 0x5C, VK_MENU = 0x12, VK_CONTROL = 0x11;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
     }
 }

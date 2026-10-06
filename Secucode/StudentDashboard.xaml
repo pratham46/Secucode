@@ -55,7 +55,7 @@
                                     <TextBlock Text="{Binding Name}" FontSize="22" FontWeight="Bold" Foreground="#1A237E"/>
                                     <TextBlock Margin="0,5,0,0" FontSize="16">
                                         <Run Text="📅 Date: " FontWeight="Bold"/>
-                                        <Run Text="{Binding Date}"/>
+                                        <Run Text="{Binding Date, Mode=OneWay}"/>
                                     </TextBlock>
                                     <TextBlock FontSize="16">
                                         <Run Text="⏳ Time Limit: " FontWeight="Bold"/>

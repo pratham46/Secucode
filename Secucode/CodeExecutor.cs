@@ -1,127 +1,106 @@
-﻿using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Threading.Tasks;
-using Python.Runtime;
 
 namespace Secucode
 {
-    public class CodeExecutor
+    // Runs student code as a child process in a fresh temp folder.
+    // ponytail: no sandbox — code runs with the app's privileges; isolate (container/VM/low-integrity user) if exams are high-stakes.
+    public static class CodeExecutor
     {
-        private const int TimeoutInMilliseconds = 5000;
+        private const int RunTimeoutMs = 5000;
+        private const int CompileTimeoutMs = 30000;
 
-        public async Task<string> ExecutePythonCodeAsync(string code, string input = "")
+        public static Task<string> RunAsync(string language, string code, string input) =>
+            Task.Run(() => Run(language, code, input));
+
+        private static string Run(string language, string code, string input)
         {
+            string dir = Path.Combine(Path.GetTempPath(), "secucode_run_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
             try
             {
-                if (!PythonEngine.IsInitialized)
-                    return "Python is not initialized. Please call InitializePython() from the main application.";
-
-                using (Py.GIL())
+                switch (language)
                 {
-                    dynamic sys = Py.Import("sys");
-                    dynamic io = Py.Import("io");
+                    case "Python":
+                        File.WriteAllText(Path.Combine(dir, "main.py"), code);
+                        return Exec("python", "main.py", dir, input, RunTimeoutMs).Output;
 
-                    sys.stdin = io.StringIO(input);
-                    sys.stdout = io.StringIO();
-                    sys.stderr = io.StringIO();
+                    case "JavaScript":
+                        File.WriteAllText(Path.Combine(dir, "main.js"), code);
+                        return Exec("node", "main.js", dir, input, RunTimeoutMs).Output;
 
-                    var scope = Py.CreateScope();
+                    case "Java":
+                        // Single-file source launch (JDK 11+): any class name works, no separate javac step.
+                        File.WriteAllText(Path.Combine(dir, "Main.java"), code);
+                        return Exec("java", "Main.java", dir, input, CompileTimeoutMs).Output;
 
-                    string result = await Task.Run(() =>
-                    {
-                        try
-                        {
-                            scope.Exec(code); // ✅ Safe here because we run it inside GIL on the same thread
-                            return sys.stdout.getvalue().ToString();
-                        }
-                        catch (PythonException ex)
-                        {
-                            return $"Python Error: {ex.Message}\n{sys.stderr.getvalue()}";
-                        }
-                    });
+                    case "C++":
+                        File.WriteAllText(Path.Combine(dir, "main.cpp"), code);
+                        var compile = Exec("g++", "main.cpp -o main.exe", dir, "", CompileTimeoutMs);
+                        if (compile.ExitCode != 0)
+                            return "C++ Compilation Error:\n" + compile.Output;
+                        return Exec(Path.Combine(dir, "main.exe"), "", dir, input, RunTimeoutMs).Output;
 
-                    return result;
+                    default:
+                        return "Unknown language: " + language;
                 }
             }
-            catch (Exception ex)
+            finally
             {
-                return $"Execution error: {ex.Message}";
+                try { Directory.Delete(dir, true); } catch { /* exe may still be locked briefly */ }
             }
         }
 
-
-
-        public string ExecuteJavaCode(string code, string input = "")
+        private static (int ExitCode, string Output) Exec(string file, string args, string workDir, string input, int timeoutMs)
         {
-            string javaFile = "UserCode.java";
-            File.WriteAllText(javaFile, code);
+            var psi = new ProcessStartInfo(file, args)
+            {
+                WorkingDirectory = workDir,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            // Output goes to a plain TextBox; ANSI color codes would show up as garbage.
+            psi.Environment.Remove("FORCE_COLOR");
+            psi.Environment["NO_COLOR"] = "1";
 
-            string compileOutput = ExecuteCommand("javac", javaFile);
-            if (!string.IsNullOrWhiteSpace(compileOutput))
-                return $"Java Compilation Error:\n{compileOutput}";
-
-            return ExecuteCommand("java", "-cp . UserCode", input);
-        }
-
-        public string ExecuteCppCode(string code, string input = "")
-        {
-            string cppFile = "UserCode.cpp";
-            string exeFile = "UserCode.exe";
-            File.WriteAllText(cppFile, code);
-
-            string compileOutput = ExecuteCommand("g++", $"{cppFile} -o {exeFile}");
-            if (!string.IsNullOrWhiteSpace(compileOutput))
-                return $"C++ Compilation Error:\n{compileOutput}";
-
-            return ExecuteCommand(exeFile, "", input);
-        }
-
-        public string ExecuteJavaScriptCode(string code, string input = "")
-        {
-            string jsFile = "UserCode.js";
-            File.WriteAllText(jsFile, code);
-            return ExecuteCommand("node", jsFile, input);
-        }
-
-        private string ExecuteCommand(string command, string args, string input = "")
-        {
+            Process proc;
             try
             {
-                var psi = new ProcessStartInfo
-                {
-                    FileName = command,
-                    Arguments = args,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using Process proc = new Process { StartInfo = psi };
-                proc.Start();
-
-                if (!string.IsNullOrWhiteSpace(input))
-                {
-                    using StreamWriter writer = proc.StandardInput;
-                    writer.Write(input);
-                }
-
-                if (!proc.WaitForExit(TimeoutInMilliseconds))
-                {
-                    proc.Kill();
-                    return "Error: Execution timed out. Possible missing input or infinite loop.";
-                }
-
-                string output = proc.StandardOutput.ReadToEnd();
-                string error = proc.StandardError.ReadToEnd();
-
-                return string.IsNullOrWhiteSpace(error) ? output : $"Error:\n{error}";
+                proc = Process.Start(psi)!;
             }
-            catch (Exception ex)
+            catch (Win32Exception)
             {
-                return $"Execution failed: {ex.Message}";
+                return (-1, $"'{Path.GetFileName(file)}' was not found. Install it and make sure it is on PATH.");
+            }
+
+            using (proc)
+            {
+                // Read both streams asynchronously so a chatty program can't fill the pipe and deadlock.
+                var stdout = proc.StandardOutput.ReadToEndAsync();
+                var stderr = proc.StandardError.ReadToEndAsync();
+
+                try
+                {
+                    proc.StandardInput.Write(input);
+                    proc.StandardInput.Close(); // EOF, so programs reading input don't hang until timeout
+                }
+                catch (IOException) { /* program exited without reading stdin */ }
+
+                if (!proc.WaitForExit(timeoutMs))
+                {
+                    proc.Kill(entireProcessTree: true);
+                    return (-1, "Error: Execution timed out (infinite loop or waiting for more input?).");
+                }
+
+                string output = stdout.Result;
+                string error = stderr.Result;
+                if (proc.ExitCode != 0)
+                    return (proc.ExitCode, output + (string.IsNullOrWhiteSpace(error) ? "" : "\nError:\n" + error) + $"\n(exit code {proc.ExitCode})");
+                return (0, output + (string.IsNullOrWhiteSpace(error) ? "" : "\n" + error));
             }
         }
     }

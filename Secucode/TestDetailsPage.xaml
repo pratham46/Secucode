@@ -83,7 +83,7 @@
                         <TextBlock Text="{Binding CreatedBy}" FontSize="22" Grid.Row="1" Grid.Column="1"/>
 
                         <TextBlock Text="Date:" FontWeight="Bold" FontSize="22" Foreground="{StaticResource PrimaryColor}" Grid.Row="2" Grid.Column="0"/>
-                        <TextBlock Text="{Binding Date}" FontSize="22" Grid.Row="2" Grid.Column="1"/>
+                        <TextBlock Text="{Binding Date, Mode=OneWay}" FontSize="22" Grid.Row="2" Grid.Column="1"/>
 
                         <TextBlock Text="Time Limit:" FontWeight="Bold" FontSize="22" Foreground="{StaticResource PrimaryColor}" Grid.Row="3" Grid.Column="0"/>
                         <TextBlock Text="{Binding TimeLimit}" FontSize="22" Grid.Row="3" Grid.Column="1"/>

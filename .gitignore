@@ -1,0 +1,15 @@
+# Build output / IDE
+bin/
+obj/
+.vs/
+*.user
+Secucode_installer/Debug/
+Secucode_installer/Release/
+
+# Runtime data written next to the exe
+SubmittedCodes/
+CapturedFaces/
+TempCodes/
+
+# Local DB backups
+Database/*backup*.sql

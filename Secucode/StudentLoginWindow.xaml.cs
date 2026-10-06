@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Navigation;
@@ -27,14 +27,14 @@ namespace Secucode
 
         private void btnLogin_Click(object sender, RoutedEventArgs e)
         {
-            string username = txtUsername.Text;
+            string username = txtUsername.Text.Trim();
             string password = txtPassword.Password;
-            string batchName = txtBatchName.Text;
+            string batchName = txtBatchName.Text.Trim();
 
-            if (AuthenticateUser(username, password, batchName, out User loggedInUser))
+            if (AuthenticateUser(username, password, batchName, out User? loggedInUser))
             {
                 // Pass the authenticated user object to the StudentDashboard
-                StudentDashboard studentDashboard = new StudentDashboard(loggedInUser);
+                StudentDashboard studentDashboard = new StudentDashboard(loggedInUser!);
                 studentDashboard.Show();
                 this.Close();
             }
@@ -45,19 +45,16 @@ namespace Secucode
         }
 
 
-        private bool AuthenticateUser(string username, string password, string batchName, out User authenticatedUser)
+        private bool AuthenticateUser(string username, string password, string batchName, out User? authenticatedUser)
         {
             authenticatedUser = null;
-            string connectionString = "Server=localhost;Database=secucode;User Id=root;Password=root;";
-
             try
             {
-                using (MySqlConnection conn = new MySqlConnection(connectionString))
+                using (MySqlConnection conn = Db.Open())
                 {
-                    conn.Open();
 
                     string query = @"
-            SELECT u.username, u.password, b.branch_name AS branch, c.class_name AS class, bt.batch_name AS batch
+            SELECT u.id, u.username, u.password, b.branch_name AS branch, c.class_name AS class, bt.batch_name AS batch
             FROM users u
             JOIN branches b ON u.branch_id = b.id
             JOIN classes c ON u.class_id = c.id
@@ -81,6 +78,8 @@ namespace Secucode
                                     // Populate authenticatedUser with the data from the database
                                     authenticatedUser = new User
                                     {
+                                        Id = reader.GetInt32("id"),
+                                        Role = "Student",
                                         Username = reader.GetString("username"),
                                         Branch = reader.GetString("branch"),
                                         Class = reader.GetString("class"),
