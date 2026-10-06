@@ -57,7 +57,7 @@ try
 }
 catch (Exception ex) { Check("LBPH loads", false, ex.Message); }
 
-string cascade = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Secucode", "haarcascade_frontalface_default.xml");
+string cascade = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Secucode.Desktop", "haarcascade_frontalface_default.xml");
 try { using var c = new CascadeClassifier(cascade); Check("haar cascade loads", true); }
 catch (Exception ex) { Check("haar cascade loads", false, ex.Message); }
 

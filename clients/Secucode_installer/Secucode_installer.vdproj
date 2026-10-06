@@ -122,7 +122,7 @@
         {
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_5B69DA2373A94B4B8CD92CE2780254C3"
             {
-            "SourcePath" = "8:..\\Secucode\\haarcascade_frontalface_default.xml"
+            "SourcePath" = "8:..\\Secucode.Desktop\\haarcascade_frontalface_default.xml"
             "TargetName" = "8:haarcascade_frontalface_default.xml"
             "Tag" = "8:"
             "Folder" = "8:_76F8C4982A11436A9A9D52433A294970"
@@ -142,7 +142,7 @@
             }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_E5E32EADC7D64A13A7AC829124C80287"
             {
-            "SourcePath" = "8:..\\Secucode\\secucode.ico"
+            "SourcePath" = "8:..\\Secucode.Desktop\\secucode.ico"
             "TargetName" = "8:secucode.ico"
             "Tag" = "8:"
             "Folder" = "8:_76F8C4982A11436A9A9D52433A294970"
@@ -766,7 +766,7 @@
         {
             "{5259A561-127C-4D43-A0A1-72F10C7B3BF8}:_AD7682FE039D4D839613F1198D646AB5"
             {
-            "SourcePath" = "8:..\\Secucode\\obj\\Debug\\net8.0-windows\\apphost.exe"
+            "SourcePath" = "8:..\\Secucode.Desktop\\obj\\Debug\\net8.0-windows\\apphost.exe"
             "TargetName" = "8:"
             "Tag" = "8:"
             "Folder" = "8:_76F8C4982A11436A9A9D52433A294970"

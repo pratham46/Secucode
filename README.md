@@ -63,7 +63,7 @@ The sample exam is dated the day you run `setup.sql`, so it can be taken right a
 ### 2. Build & run
 
 ```powershell
-dotnet run --project Secucode
+dotnet run --project clients/Secucode.Desktop
 ```
 
 or open `Secucode.sln` in Visual Studio and run the `Secucode` project.
@@ -74,7 +74,7 @@ or open `Secucode.sln` in Visual Studio and run the `Secucode` project.
 ### 3. Smoke checks
 
 ```powershell
-dotnet run --project Secucode.Checks
+dotnet run --project clients/Secucode.Desktop.Checks
 ```
 
 This checks the code runner (output, stdin, timeouts, errors), the native face-recognition module, and the database schema.
@@ -87,7 +87,7 @@ This checks the code runner (output, stdin, timeouts, errors), the native face-r
 Database/
   setup.sql                   schema + seed data
   add-user.ps1                create users with hashed password/PIN
-Secucode/                     the WPF app
+clients/Secucode.Desktop/      the WPF app
   Db.cs                       connection string (SECUCODE_DB override)
   CodeExecutor.cs             runs student code as a child process in a temp folder
   MainWindow                  choose Teacher / Student
