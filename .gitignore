@@ -13,3 +13,6 @@ TempCodes/
 
 # Local DB backups
 Database/*backup*.sql
+
+# Subagent-driven development scratch (ledgers, briefs, reports)
+.superpowers/
