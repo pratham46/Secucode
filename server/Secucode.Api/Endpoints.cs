@@ -1,3 +1,5 @@
+using Secucode.Api.Auth;
+
 namespace Secucode.Api;
 
 public static class Endpoints
@@ -6,5 +8,6 @@ public static class Endpoints
     {
         var api = app.MapGroup("/api");
         api.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+        api.MapAuth();
     }
 }

@@ -14,8 +14,8 @@ public sealed class HealthTests(ApiFixture api)
     }
 
     [Fact]
-    public async Task Unknown_routes_return_a_problem()
+    public async Task Unknown_routes_are_a_401_problem_when_anonymous()
     {
-        await (await api.Factory.CreateClient().GetAsync("/api/nope")).ExpectProblemAsync(HttpStatusCode.NotFound);
+        await (await api.Factory.CreateClient().GetAsync("/api/nope")).ExpectProblemAsync(HttpStatusCode.Unauthorized);
     }
 }
