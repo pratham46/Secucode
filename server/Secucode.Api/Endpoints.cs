@@ -1,5 +1,6 @@
 using Secucode.Api.Auth;
 using Secucode.Api.Features.Masters;
+using Secucode.Api.Features.Users;
 
 namespace Secucode.Api;
 
@@ -12,5 +13,6 @@ public static class Endpoints
         api.MapAuth();
         api.MapMasters();
         api.MapSettings();
+        api.MapUsers();
     }
 }
