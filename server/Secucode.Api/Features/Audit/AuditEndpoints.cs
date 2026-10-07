@@ -42,10 +42,10 @@ public static class AuditEndpoints
                 .Select(e => (int?)e.Id).ToList();
             var departmentIds = inScope.Where(s => s.Level == ScopeLevels.Department).Select(s => s.BranchId).ToList();
             q = q.Where(e => (e.ExamId != null && examIds.Contains(e.ExamId))
-                          || (e.ExamId == null && e.BranchId != null && departmentIds.Contains(e.BranchId)));
+                          || (e.BranchId != null && departmentIds.Contains(e.BranchId))); // matched by branch so a deleted exam's history stays visible
         }
 
-        var p = Math.Max(page ?? 1, 1);
+        var p = Math.Clamp(page ?? 1, 1, 100_000);
         var total = await q.CountAsync();
         var items = await q.OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id)
             .Skip((p - 1) * PageSize).Take(PageSize)

@@ -47,6 +47,34 @@ public sealed class AuditTests(ApiFixture api)
     }
 
     [Fact]
+    public async Task Department_viewer_still_sees_the_history_of_a_deleted_exam()
+    {
+        var a = await _world.SectionAsync();
+        var author = await _world.LoginAsync(await _world.UserAsync(RoleNames.Faculty, a.Department));
+        var hod = await _world.LoginAsync(await _world.UserAsync(RoleNames.Hod, a.Department));
+        var exam = (await (await author.PostJsonAsync("/api/exams", NewExam(a))).ReadAsync<ExamDto>(Created)).Id;
+        await (await author.DeleteAsync($"/api/exams/{exam}")).ExpectAsync(NoContent);
+
+        var actions = (await Audit(hod, $"examId={exam}")).Items.Select(e => e.Action).ToList();
+        Assert.Contains("exam.delete", actions);
+        Assert.Contains("exam.create", actions);
+    }
+
+    [Fact]
+    public async Task From_and_to_accept_UTC_strings_without_shifting()
+    {
+        var a = await _world.SectionAsync();
+        var author = await _world.LoginAsync(await _world.UserAsync(RoleNames.Faculty, a.Department));
+        var exam = (await (await author.PostJsonAsync("/api/exams", NewExam(a))).ReadAsync<ExamDto>(Created)).Id;
+        var at = DateTime.SpecifyKind((await Audit(author, $"examId={exam}")).Items.Single().OccurredAt, DateTimeKind.Utc);
+        static string Z(DateTime t) => t.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
+
+        Assert.Single((await Audit(author, $"examId={exam}&from={Z(at.AddMinutes(-1))}&to={Z(at.AddMinutes(1))}")).Items);
+        Assert.Empty((await Audit(author, $"examId={exam}&from={Z(at.AddMinutes(1))}")).Items);
+        Assert.Empty((await Audit(author, $"examId={exam}&to={Z(at.AddMinutes(-1))}")).Items);
+    }
+
+    [Fact]
     public async Task Every_audited_change_writes_exactly_one_row_and_failed_changes_write_none()
     {
         await _world.SetSwitchesAsync(true);
