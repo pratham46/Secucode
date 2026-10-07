@@ -101,13 +101,15 @@ public static partial class UserEndpoints
             .ThrowIfInvalid();
 
         var before = Snapshot(user);
+        var deactivating = user.IsActive && !req.IsActive;
         user.FullName = req.FullName.Trim();
         user.Email = string.IsNullOrWhiteSpace(req.Email) ? null : req.Email.Trim();
-        if (user.IsActive && !req.IsActive)
-            await RevokeSessionsAsync(db, user.Id, time);
         user.IsActive = req.IsActive;
+        await using var tx = await db.Database.BeginTransactionAsync();
         audit.Record(caller.UserId, "user.update", "User", user.Id, before, Snapshot(user), branchId: user.Assignments.FirstOrDefault()?.BranchId);
         await db.SaveChangesAsync();
+        if (deactivating) await RevokeSessionsAsync(db, user.Id, time);
+        await tx.CommitAsync();
         return user.ToDto(caller.Today);
     }
 
@@ -116,9 +118,11 @@ public static partial class UserEndpoints
         var user = await ManageableAsync(db, caller, id);
         var before = Snapshot(user);
         user.IsActive = false;
-        await RevokeSessionsAsync(db, user.Id, time);
+        await using var tx = await db.Database.BeginTransactionAsync();
         audit.Record(caller.UserId, "user.deactivate", "User", user.Id, before, Snapshot(user), branchId: user.Assignments.FirstOrDefault()?.BranchId);
         await db.SaveChangesAsync();
+        await RevokeSessionsAsync(db, user.Id, time);
+        await tx.CommitAsync();
         return Results.NoContent();
     }
 
@@ -127,9 +131,11 @@ public static partial class UserEndpoints
         var user = await ManageableAsync(db, caller, id);
         new Validator().Rule((req.NewPassword?.Length ?? 0) >= 6, "newPassword", "Password must be at least 6 characters.").ThrowIfInvalid();
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(req.NewPassword);
-        await RevokeSessionsAsync(db, user.Id, time);
+        await using var tx = await db.Database.BeginTransactionAsync();
         audit.Record(caller.UserId, "user.reset_password", "User", user.Id, branchId: user.Assignments.FirstOrDefault()?.BranchId);
         await db.SaveChangesAsync();
+        await RevokeSessionsAsync(db, user.Id, time);
+        await tx.CommitAsync();
         return Results.NoContent();
     }
 
