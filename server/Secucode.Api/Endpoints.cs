@@ -1,5 +1,6 @@
 using Secucode.Api.Auth;
 using Secucode.Api.Features.Attempts;
+using Secucode.Api.Features.Audit;
 using Secucode.Api.Features.Corrections;
 using Secucode.Api.Features.Exams;
 using Secucode.Api.Features.Live;
@@ -26,6 +27,7 @@ public static class Endpoints
         api.MapRunner();
         api.MapAttempts();
         api.MapCorrections();
+        api.MapAudit();
         app.MapHub<ExamHub>("/hubs/exams");
     }
 }
