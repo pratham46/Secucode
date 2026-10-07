@@ -80,7 +80,10 @@ public static class ServiceSetup
         services.AddScoped<Caller>();
         services.AddScoped<AuditWriter>();
         services.Configure<RunnerOptions>(config.GetSection("Runner"));
-        services.AddSingleton<ICodeRunner>(sp => ActivatorUtilities.CreateInstance<LocalCodeRunner>(sp));
+        services.AddSingleton<ICodeRunner>(sp =>
+            sp.GetRequiredService<IOptions<RunnerOptions>>().Value.Mode.Equals("Docker", StringComparison.OrdinalIgnoreCase)
+                ? ActivatorUtilities.CreateInstance<DockerCodeRunner>(sp)
+                : ActivatorUtilities.CreateInstance<LocalCodeRunner>(sp));
         services.AddRateLimiter(o =>
         {
             o.OnRejected = (ctx, _) => new ValueTask(ErrorHandling.WriteAsync(ctx.HttpContext, 429, "Too many requests",
