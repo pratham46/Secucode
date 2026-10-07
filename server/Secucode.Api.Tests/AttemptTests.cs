@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Secucode.Api.Auth;
+using Secucode.Api.Data.Entities;
 using Secucode.Api.Tests.Infrastructure;
 using Secucode.Contracts;
 
@@ -198,5 +199,46 @@ public sealed class AttemptTests(ApiFixture api)
 
         var colleague = await _world.LoginAsync(await _world.UserAsync(RoleNames.Faculty, x.Section.Department));
         await (await colleague.GetAsync($"/api/exams/{x.ExamId}/attempts")).ExpectProblemAsync(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Concurrent_strike_events_are_all_counted()
+    {
+        var x = await SetupAsync();
+        var student = await _world.LoginAsync(x.Student);
+        var attempt = await (await Start(student, x.ExamId)).ReadAsync<AttemptDto>(HttpStatusCode.Created);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            student.PostJsonAsync($"/api/attempts/{attempt.Id}/events", new AttemptEventRequest(AttemptEventType.FocusLost, null, null))));
+        Assert.All(results, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
+        Assert.Equal(8, (await _world.ReloadAttemptAsync(attempt.Id)).Strikes);
+    }
+
+    [Fact]
+    public async Task Saving_after_submit_conflicts_and_keeps_the_submitted_code()
+    {
+        var x = await SetupAsync();
+        var student = await _world.LoginAsync(x.Student);
+        var attempt = await (await Start(student, x.ExamId)).ReadAsync<AttemptDto>(HttpStatusCode.Created);
+        await (await student.PostJsonAsync($"/api/attempts/{attempt.Id}/submit", new SubmitRequest("final", "Python", null))).ExpectAsync(HttpStatusCode.OK);
+
+        await (await student.PutJsonAsync($"/api/attempts/{attempt.Id}/code", new SaveCodeRequest("stale", "Python"))).ExpectProblemAsync(HttpStatusCode.Conflict);
+        Assert.Equal("final", (await _world.ReloadAttemptAsync(attempt.Id)).Code);
+    }
+
+    [Fact]
+    public async Task Evidence_missing_on_disk_is_a_404()
+    {
+        var x = await SetupAsync();
+        var student = await _world.LoginAsync(x.Student);
+        var attempt = await (await Start(student, x.ExamId)).ReadAsync<AttemptDto>(HttpStatusCode.Created);
+        var id = await _world.WithDb(async db =>
+        {
+            var f = new EvidenceFile { AttemptId = attempt.Id, Kind = EvidenceKind.ReferenceFace, StoragePath = "nope/missing.png", ContentType = "image/png", SizeBytes = 1, CreatedAt = _world.Now };
+            db.EvidenceFiles.Add(f);
+            await db.SaveChangesAsync();
+            return f.Id;
+        });
+        await (await student.GetAsync($"/api/evidence/{id}")).ExpectProblemAsync(HttpStatusCode.NotFound);
     }
 }

@@ -107,10 +107,11 @@ public static class AttemptEndpoints
     {
         var a = await WritableAsync(db, caller, id, time);
         ValidateCode(req.Code, req.Language);
-        a.Code = req.Code;
-        a.Language = req.Language;
-        a.LastSavedAt = time.UtcNow();
-        await db.SaveChangesAsync();
+        var saved = time.UtcNow();
+        // Guarded in SQL so a save that loses the race with submit can't overwrite the submitted code.
+        CloseGuard(await db.Attempts.Where(x => x.Id == id && x.Status == AttemptStatus.InProgress)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Code, req.Code).SetProperty(x => x.Language, req.Language).SetProperty(x => x.LastSavedAt, saved)));
+        await db.Entry(a).ReloadAsync();
         await live.CodeSavedAsync(a);
         return Results.NoContent();
     }
@@ -126,9 +127,10 @@ public static class AttemptEndpoints
 
         var e = new AttemptEvent { AttemptId = id, Type = req.Type, OccurredAt = time.UtcNow(), Detail = req.Detail, EvidenceId = req.EvidenceId };
         db.AttemptEvents.Add(e);
-        if (StrikeTypes.Contains(req.Type))
-            a.Strikes++;
         await db.SaveChangesAsync();
+        if (StrikeTypes.Contains(req.Type)) // atomic increment: concurrent events can't lose a strike
+            await db.Attempts.Where(x => x.Id == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.Strikes, x => x.Strikes + 1));
+        await db.Entry(a).ReloadAsync();
         await live.EventRecordedAsync(a, req.Type);
         return Results.Created($"/api/attempts/{id}", e.ToDto());
     }
@@ -161,14 +163,12 @@ public static class AttemptEndpoints
         var a = await WritableAsync(db, caller, id, time);
         ValidateCode(req.Code, req.Language);
         var now = time.UtcNow();
-        a.Code = req.Code;
-        a.Language = req.Language;
-        a.LastSavedAt = now;
-        a.Status = AttemptStatus.Submitted;
-        a.SubmittedAt = now;
         var reason = string.IsNullOrWhiteSpace(req.Reason) ? "Submitted by the student." : req.Reason.Trim();
-        a.SubmitReason = reason.Length > 255 ? reason[..255] : reason;
-        await db.SaveChangesAsync();
+        reason = reason.Length > 255 ? reason[..255] : reason;
+        CloseGuard(await db.Attempts.Where(x => x.Id == id && x.Status == AttemptStatus.InProgress)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Code, req.Code).SetProperty(x => x.Language, req.Language).SetProperty(x => x.LastSavedAt, now)
+                .SetProperty(x => x.Status, AttemptStatus.Submitted).SetProperty(x => x.SubmittedAt, now).SetProperty(x => x.SubmitReason, reason)));
+        await db.Entry(a).ReloadAsync();
         await live.AttemptSubmittedAsync(a);
         return a.ToDto(now);
     }
@@ -191,7 +191,8 @@ public static class AttemptEndpoints
         var ownReferenceFace = attempt.StudentId == caller.UserId && file.Kind == EvidenceKind.ReferenceFace;
         if (!ownReferenceFace && !await caller.CanOnExamAsync(Capability.ViewEvidence, attempt.Exam))
             throw ApiException.NotFound("Evidence");
-        return Results.File(store.OpenRead(file.StoragePath), file.ContentType);
+        try { return Results.File(store.OpenRead(file.StoragePath), file.ContentType); }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException) { throw ApiException.NotFound("Evidence"); }
     }
 
     // A deactivated student keeps a valid access token for up to 15 minutes; stop them here.
@@ -214,6 +215,9 @@ public static class AttemptEndpoints
             throw ApiException.Conflict("Time is up for this attempt.");
         return a;
     }
+
+    private static Task CloseGuard(int rows) =>
+        rows == 0 ? throw ApiException.Conflict("This attempt is closed.") : Task.CompletedTask;
 
     private static void ValidateCode(string? code, string? language) => new Validator()
         .Rule(code is not null && code.Length <= MaxCodeChars, "code", "Code is required and must be under 256 KB.")
