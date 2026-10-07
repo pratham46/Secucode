@@ -51,6 +51,8 @@ public sealed class DockerCodeRunner : ICodeRunner, IDisposable
                 NanoCPUs = 500_000_000,
                 PidsLimit = 64,
                 ReadonlyRootfs = true,
+                CapDrop = ["ALL"],
+                SecurityOpt = ["no-new-privileges"],
                 Tmpfs = new Dictionary<string, string>
                 {
                     ["/work"] = "rw,exec,nosuid,size=64m,mode=1777",

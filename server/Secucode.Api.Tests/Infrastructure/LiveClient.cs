@@ -34,6 +34,8 @@ public sealed class LiveClient : IAsyncDisposable
             .Build();
         var client = new LiveClient(connection);
         await connection.StartAsync();
+        // StartAsync returns before the server's OnConnectedAsync (user-group join) has run; a round-trip is the barrier.
+        await connection.InvokeAsync("LeaveExam", 0);
         return client;
     }
 

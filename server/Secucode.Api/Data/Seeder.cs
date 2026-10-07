@@ -20,7 +20,7 @@ public static class Seeder
     }
 
     // A small believable college for demos. Does nothing if any user exists.
-    public static async Task<bool> SeedDemoAsync(AppDbContext db, TimeProvider time)
+    public static async Task<bool> SeedDemoAsync(AppDbContext db, TimeProvider time, string adminPassword = "Admin@123")
     {
         if (await db.Users.AnyAsync())
             return false;
@@ -54,7 +54,7 @@ public static class Seeder
         var department = new Scope(cse.Id, null, null);
         var faculty = Person("faculty.cse", "Faculty@123", "Prof. Rahul Patil", null, (RoleNames.Faculty, department));
         db.Users.AddRange(
-            Person("superadmin", "Admin@123", "Super Admin", null, (RoleNames.SuperAdmin, Scope.Institution)),
+            Person("superadmin", adminPassword, "Super Admin", null, (RoleNames.SuperAdmin, Scope.Institution)),
             Person("hod.cse", "Hod@123", "Dr. Asha Kulkarni", null, (RoleNames.Faculty, department), (RoleNames.Hod, department)),
             faculty,
             Person("student1", "Student@123", "Neha Sharma", "1234", (RoleNames.Student, new Scope(cse.Id, te.Id, a1.Id))),
@@ -75,10 +75,21 @@ public static class Seeder
 
     public static async Task SeedDemoAsync(this IServiceProvider services)
     {
+        var adminPassword = services.GetRequiredService<IConfiguration>()["Seed:AdminPassword"];
+        if (string.IsNullOrEmpty(adminPassword))
+        {
+            if (services.GetRequiredService<IHostEnvironment>().IsProduction())
+            {
+                Console.Error.WriteLine("Refusing to seed in Production without Seed__AdminPassword (the Super Admin password). Set it and run again.");
+                Environment.ExitCode = 1;
+                return;
+            }
+            adminPassword = "Admin@123";
+        }
         using var scope = services.CreateScope();
-        var created = await SeedDemoAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), scope.ServiceProvider.GetRequiredService<TimeProvider>());
+        var created = await SeedDemoAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), scope.ServiceProvider.GetRequiredService<TimeProvider>(), adminPassword);
         Console.WriteLine(created
-            ? "Demo data created. Sign in as superadmin / Admin@123, hod.cse / Hod@123, faculty.cse / Faculty@123, student1 / Student@123 (PIN 1234)."
+            ? "Demo data created. Demo logins: superadmin (Seed:AdminPassword, default Admin@123 outside Production), hod.cse / Hod@123, faculty.cse / Faculty@123, student1 / Student@123 (PIN 1234). Change the demo passwords outside development."
             : "The database already has users, so demo data was not added.");
     }
 }

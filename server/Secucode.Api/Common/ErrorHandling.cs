@@ -18,9 +18,9 @@ public static class ErrorHandling
         {
             await WriteAsync(ctx, ex.Status, ex.Title, ex.Detail, ex.Errors);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is MySqlException { ErrorCode: MySqlErrorCode.DuplicateKeyEntry })
+        catch (DbUpdateException ex) when (ex.InnerException is MySqlException { ErrorCode: MySqlErrorCode.DuplicateKeyEntry or MySqlErrorCode.RowIsReferenced2 or MySqlErrorCode.NoReferencedRow2 })
         {
-            // e.g. two simultaneous "start attempt" calls racing for the same attempt number
+            // duplicate key (two "start attempt" calls racing) or a foreign-key race (delete vs. new reference)
             await WriteAsync(ctx, 409, "Conflict", "That conflicts with an existing record. Refresh and try again.", null);
         }
     });

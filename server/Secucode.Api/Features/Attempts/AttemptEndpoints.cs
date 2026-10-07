@@ -40,12 +40,22 @@ public static class AttemptEndpoints
     }
 
     // Spec §8 step 1, checks in the spec's order.
-    private static async Task<IResult> StartAsync(int examId, StartAttemptRequest req, AppDbContext db, Caller caller, TimeProvider time, LiveNotifier live)
+    private static async Task<IResult> StartAsync(int examId, StartAttemptRequest req, AppDbContext db, Caller caller, TimeProvider time, LiveNotifier live, LoginThrottle throttle)
     {
         var me = await ActiveUserAsync(db, caller);
         var scope = await caller.StudentScopeAsync() ?? throw ApiException.Forbidden("Only students can take exams.");
-        if (me.PinHash is null || string.IsNullOrEmpty(req.Pin) || !BCrypt.Net.BCrypt.Verify(req.Pin, me.PinHash))
-            throw ApiException.Forbidden("Incorrect PIN.");
+        var pinKey = $"pin:{me.Id}";
+        using (await throttle.AcquireAsync(pinKey))
+        {
+            if (throttle.IsLocked(pinKey))
+                throw ApiException.TooManyRequests("Too many failed attempts. Try again in a few minutes.");
+            if (me.PinHash is null || string.IsNullOrEmpty(req.Pin) || !BCrypt.Net.BCrypt.Verify(req.Pin, me.PinHash))
+            {
+                throttle.Fail(pinKey);
+                throw ApiException.Forbidden("Incorrect PIN.");
+            }
+            throttle.Succeed(pinKey);
+        }
 
         var exam = await db.Exams.Include(e => e.Questions).SingleOrDefaultAsync(e => e.Id == examId);
         if (exam is null || !exam.Target.Contains(scope))
@@ -216,8 +226,11 @@ public static class AttemptEndpoints
         return a;
     }
 
-    private static Task CloseGuard(int rows) =>
-        rows == 0 ? throw ApiException.Conflict("This attempt is closed.") : Task.CompletedTask;
+    private static void CloseGuard(int rows)
+    {
+        if (rows == 0)
+            throw ApiException.Conflict("This attempt is closed.");
+    }
 
     private static void ValidateCode(string? code, string? language) => new Validator()
         .Rule(code is not null && code.Length <= MaxCodeChars, "code", "Code is required and must be under 256 KB.")

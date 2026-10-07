@@ -46,8 +46,8 @@ public sealed class AutoCloseService(IServiceScopeFactory scopes, TimeProvider t
         var closed = 0;
         foreach (var a in expired)
         {
-            // Status guard in the WHERE: a concurrent submit that already closed the attempt wins.
-            var rows = await db.Attempts.Where(x => x.Id == a.Id && x.Status == AttemptStatus.InProgress)
+            // Status and deadline guards in the WHERE: a concurrent submit or a just-committed extension wins (spec 8.6).
+            var rows = await db.Attempts.Where(x => x.Id == a.Id && x.Status == AttemptStatus.InProgress && x.DeadlineAt < cutoff)
                 .ExecuteUpdateAsync(x => x
                     .SetProperty(y => y.Status, AttemptStatus.AutoSubmitted)
                     .SetProperty(y => y.SubmittedAt, now)

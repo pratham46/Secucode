@@ -42,6 +42,16 @@ public sealed class AttemptTests(ApiFixture api)
     }
 
     [Fact]
+    public async Task Repeated_wrong_pins_lock_the_student_out_even_for_the_right_pin()
+    {
+        var x = await SetupAsync();
+        var student = await _world.LoginAsync(x.Student);
+        for (var i = 0; i < 5; i++)
+            await (await Start(student, x.ExamId, pin: "0000")).ExpectProblemAsync(HttpStatusCode.Forbidden);
+        await (await Start(student, x.ExamId)).ExpectProblemAsync(HttpStatusCode.TooManyRequests);
+    }
+
+    [Fact]
     public async Task A_wrong_pin_or_a_staff_account_cannot_start()
     {
         var x = await SetupAsync();

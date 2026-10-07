@@ -24,6 +24,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: "Server=mysql;Database=secucode_api;User Id=root;Password=${MYSQL_ROOT_PASSWORD:-secucode-root};"
       Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env to a random string of at least 32 characters}
+      Seed__AdminPassword: ${Seed__AdminPassword:-}
       Runner__Mode: Docker
       Runner__DockerEndpoint: unix:///var/run/docker.sock
       Evidence__Root: /data/evidence

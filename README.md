@@ -98,6 +98,10 @@ Demo logins: `superadmin / Admin@123`, `hod.cse / Hod@123`, `faculty.cse / Facul
 **Run with Docker** (code runs sandboxed in containers): copy `.env.example` to `.env`, set `JWT_KEY`, then
 `docker compose up --build`, and seed once with `docker compose exec api dotnet Secucode.Api.dll seed`.
 
+> **Warning:** in Production, seeding refuses to run unless `Seed__AdminPassword` (the `superadmin` password) is set in `.env`. The other demo accounts (`hod.cse`, `faculty.cse`, `student1`, `student2`) still use the published demo passwords, and there is no change-password endpoint yet: have the Super Admin reset them via `reset-password`, or deactivate them, before real use.
+
+**Live client contract:** SignalR runs `OnConnectedAsync` (joining the user's group) after the client's `start` returns, and pushes sent while a client is disconnected are lost. After every `connected` or `reconnected`, clients must re-read `GET /attempts/{id}` (it returns `DeadlineAt` and `ServerTime`); clients should also make refresh single-flight.
+
 **Tests** (Docker Desktop must be running; `python` and `node` on PATH):
 
 ```powershell

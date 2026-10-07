@@ -19,13 +19,14 @@ public sealed class SeedTests(ApiFixture api)
             await db.Database.MigrateAsync();
             await Seeder.EnsureReferenceDataAsync(db, api.Time);
 
-            Assert.True(await Seeder.SeedDemoAsync(db, api.Time));
+            Assert.True(await Seeder.SeedDemoAsync(db, api.Time, "Custom@Pass1"));
 
             Assert.Equal(8, await db.Roles.CountAsync());
             Assert.Equal(5, await db.Users.CountAsync());
             var hod = await db.Users.Include(u => u.Assignments).ThenInclude(a => a.Role).SingleAsync(u => u.Username == "hod.cse");
             Assert.Equal([RoleNames.Faculty, RoleNames.Hod], hod.Assignments.Select(a => a.Role.Name).OrderBy(n => n));
             Assert.True(BCrypt.Net.BCrypt.Verify("Hod@123", hod.PasswordHash));
+            Assert.True(BCrypt.Net.BCrypt.Verify("Custom@Pass1", (await db.Users.SingleAsync(u => u.Username == "superadmin")).PasswordHash));
             Assert.True(await db.Exams.AnyAsync(e => e.Title == "Sample Coding Test" && e.Questions.Count == 2));
 
             Assert.False(await Seeder.SeedDemoAsync(db, api.Time)); // idempotent
