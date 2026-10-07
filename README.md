@@ -81,6 +81,32 @@ This checks the code runner (output, stdin, timeouts, errors), the native face-r
 
 ---
 
+## 🌐 Platform API (in progress)
+
+SecuCode is becoming a client-server platform: an ASP.NET Core 8 API (`server/Secucode.Api`) that the Windows app and a
+new web app will both use. Design: `docs/superpowers/specs/2026-10-06-secucode-platform-backend-design.md`.
+
+**Run locally** (needs MySQL on localhost with root/root, and the .NET 8 SDK):
+
+```powershell
+dotnet run --project server/Secucode.Api -- seed   # creates database secucode_api + demo data, then exits
+dotnet run --project server/Secucode.Api           # API + Swagger UI at the URL it prints, /swagger
+```
+
+Demo logins: `superadmin / Admin@123`, `hod.cse / Hod@123`, `faculty.cse / Faculty@123`, `student1 / Student@123` (PIN `1234`).
+
+**Run with Docker** (code runs sandboxed in containers): copy `.env.example` to `.env`, set `JWT_KEY`, then
+`docker compose up --build`, and seed once with `docker compose exec api dotnet Secucode.Api.dll seed`.
+
+**Tests** (Docker Desktop must be running; `python` and `node` on PATH):
+
+```powershell
+dotnet test server/Secucode.Api.Tests --filter "Category!=Docker"   # fast suite
+dotnet test server/Secucode.Api.Tests --filter "Category=Docker"    # sandbox tests, pulls images on first run
+```
+
+---
+
 ## 🗂️ Project layout
 
 ```

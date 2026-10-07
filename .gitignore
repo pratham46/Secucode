@@ -16,3 +16,8 @@ Database/*backup*.sql
 
 # Subagent-driven development scratch (ledgers, briefs, reports)
 .superpowers/
+
+# Local secrets for docker compose
+.env
+# Evidence written by a locally running API
+server/Secucode.Api/evidence/
