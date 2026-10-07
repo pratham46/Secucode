@@ -132,4 +132,28 @@ public sealed class AuthTests(ApiFixture api)
         Assert.Contains(me.Capabilities, c => c is { Capability: Capability.ResetAttempts, Reach: Reach.OwnOnly, RoleName: RoleNames.Faculty });
         Assert.DoesNotContain(me.Capabilities, c => c.RoleName == RoleNames.ClassCoordinator);
     }
+
+    [Fact]
+    public async Task Parallel_wrong_guesses_still_trigger_the_lockout()
+    {
+        var u = await _world.UserAsync(RoleNames.Faculty, (await _world.SectionAsync()).Department);
+        await Task.WhenAll(Enumerable.Range(0, 10).Select(_ =>
+            Anonymous.PostJsonAsync("/api/auth/login", new LoginRequest(u.Username, "wrong", ClientKind.Web))));
+
+        var res = await Anonymous.PostJsonAsync("/api/auth/login", new LoginRequest(u.Username, World.Password, ClientKind.Web));
+        await res.ExpectProblemAsync(HttpStatusCode.TooManyRequests);
+    }
+
+    [Fact]
+    public async Task Parallel_refreshes_of_one_token_let_exactly_one_win()
+    {
+        var u = await _world.UserAsync(RoleNames.Faculty, (await _world.SectionAsync()).Department);
+        var login = await _world.LoginResponseAsync(u);
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 2).Select(_ =>
+            Anonymous.PostJsonAsync("/api/auth/refresh", new RefreshRequest(login.RefreshToken))));
+
+        Assert.Equal(1, results.Count(r => r.StatusCode == HttpStatusCode.OK));
+        Assert.Equal(1, results.Count(r => r.StatusCode == HttpStatusCode.Unauthorized));
+    }
 }

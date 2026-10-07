@@ -54,7 +54,7 @@ public static class ServiceSetup
                     LifetimeValidator = (notBefore, expires, _, _) =>
                     {
                         var now = time.GetUtcNow().UtcDateTime;
-                        return (notBefore is null || notBefore.Value <= now.AddMinutes(1)) && (expires is null || expires.Value > now);
+                        return (notBefore is null || notBefore.Value <= now.AddMinutes(1)) && (expires is not null && expires.Value > now);
                     },
                 };
                 o.Events = new JwtBearerEvents

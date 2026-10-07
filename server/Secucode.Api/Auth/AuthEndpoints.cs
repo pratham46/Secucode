@@ -27,6 +27,7 @@ public static class AuthEndpoints
             .ThrowIfInvalid();
 
         var username = req.Username.Trim();
+        using var _ = await throttle.AcquireAsync(username);
         if (throttle.IsLocked(username))
             throw ApiException.TooManyRequests("Too many failed attempts. Try again in a few minutes.");
 
@@ -53,7 +54,11 @@ public static class AuthEndpoints
         var rt = await db.RefreshTokens.SingleOrDefaultAsync(t => t.TokenHash == hash)
             ?? throw ApiException.Unauthorized("Invalid refresh token.");
 
-        if (rt.RevokedAt is not null)
+        // Conditional revoke makes rotation atomic: only one concurrent refresh can win.
+        var won = rt.RevokedAt is null && rt.ExpiresAt > now
+            && await db.RefreshTokens.Where(t => t.Id == rt.Id && t.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.RevokedAt, now)) == 1;
+        if (rt.RevokedAt is not null || (!won && rt.ExpiresAt > now))
         {
             // A rotated token came back: assume it was stolen and sign the user out everywhere.
             await db.RefreshTokens.Where(t => t.UserId == rt.UserId && t.RevokedAt == null)
