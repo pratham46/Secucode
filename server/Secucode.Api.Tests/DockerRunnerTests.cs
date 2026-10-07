@@ -40,6 +40,14 @@ public sealed class DockerRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task Endless_output_is_bounded()
+    {
+        var r = await Run("Python", "while True: print('x' * 1000)");
+        Assert.NotEqual(0, r.ExitCode); // /tmp fills up (64m) and the write fails, which ends the program before the timeout
+        Assert.True(r.Stdout.Length <= 65536);
+    }
+
+    [Fact]
     public async Task There_is_no_network()
     {
         var r = await Run("Python", "import urllib.request\nurllib.request.urlopen('http://1.1.1.1', timeout=3)");

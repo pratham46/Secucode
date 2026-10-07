@@ -76,15 +76,29 @@ public sealed class DockerCodeRunner : ICodeRunner, IDisposable
             {
                 killed = true;
                 exitCode = -1;
-                await _docker.Containers.KillContainerAsync(created.ID, new ContainerKillParameters(), CancellationToken.None);
+                try
+                {
+                    await _docker.Containers.KillContainerAsync(created.ID, new ContainerKillParameters(), CancellationToken.None);
+                }
+                catch (Exception e) when (e is DockerContainerNotFoundException or DockerApiException)
+                {
+                    // finished in the meantime; read its logs anyway
+                }
             }
 
             var (stdout, stderr) = await ReadLogsAsync(created.ID, o.MaxOutputBytes);
-            return new RunResult(stdout, stderr, (int)exitCode, killed || exitCode == 124, clock.ElapsedMilliseconds); // 124 = `timeout` fired
+            return new RunResult(stdout, stderr, (int)exitCode, killed || exitCode == 124 || (exitCode == 137 && clock.ElapsedMilliseconds >= o.RunTimeoutSeconds * 1000L), clock.ElapsedMilliseconds); // 124 = `timeout` fired, 137 = KILLed after -k (else an OOM kill)
         }
         finally
         {
-            await _docker.Containers.RemoveContainerAsync(created.ID, new ContainerRemoveParameters { Force = true }, CancellationToken.None);
+            try
+            {
+                await _docker.Containers.RemoveContainerAsync(created.ID, new ContainerRemoveParameters { Force = true }, CancellationToken.None);
+            }
+            catch
+            {
+                // best-effort cleanup must not mask the result or the original exception
+            }
         }
     }
 
@@ -92,9 +106,10 @@ public sealed class DockerCodeRunner : ICodeRunner, IDisposable
 
     private static string BuildScript(LanguageOptions lang, RunnerOptions o)
     {
-        var compile = lang.Compile is null ? "" : $"timeout {o.CompileTimeoutSeconds} {lang.Compile} || exit $?; ";
+        var compile = lang.Compile is null ? "" : $"timeout -k 1 {o.CompileTimeoutSeconds} {lang.Compile} || exit $?; ";
         return $"echo \"$CODE_B64\" | base64 -d > {lang.FileName} && echo \"$STDIN_B64\" | base64 -d > /tmp/stdin.txt && "
-             + $"{compile}timeout {o.RunTimeoutSeconds} {lang.Run} < /tmp/stdin.txt";
+             + $"{compile}timeout -k 1 {o.RunTimeoutSeconds} {lang.Run} < /tmp/stdin.txt > /tmp/out.txt 2> /tmp/err.txt; code=$?; "
+             + $"head -c {o.MaxOutputBytes} /tmp/out.txt; head -c {o.MaxOutputBytes} /tmp/err.txt >&2; exit $code";
     }
 
     private async Task<(string Stdout, string Stderr)> ReadLogsAsync(string id, int max)
