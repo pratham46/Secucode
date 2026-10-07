@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
 using Secucode.Api.Data;
 using Secucode.Api.Features.Runner;
+using Secucode.Api.Features.Live;
 
 namespace Secucode.Api;
 
@@ -92,6 +93,8 @@ public static class ServiceSetup
                 http.User.FindFirstValue("sub") ?? http.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
         });
+        services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        services.AddSingleton<LiveNotifier>();
         return services;
     }
 
