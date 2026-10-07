@@ -98,6 +98,9 @@ public static class ServiceSetup
         services.AddSingleton<LiveNotifier>();
         services.Configure<EvidenceOptions>(config.GetSection("Evidence"));
         services.AddSingleton<EvidenceStore>();
+        services.Configure<AttemptOptions>(config.GetSection("Attempts"));
+        services.AddSingleton<AutoCloseService>();
+        services.AddHostedService(sp => sp.GetRequiredService<AutoCloseService>());
         return services;
     }
 
