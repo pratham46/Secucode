@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
+using Secucode.Api.Data;
 
 namespace Secucode.Api;
 
@@ -11,6 +13,7 @@ public static class ServiceSetup
         services.TryAddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
         services.AddProblemDetails();
+        services.AddDbContext<AppDbContext>(o => o.UseMySql(config.GetConnectionString("Default"), DatabaseSetup.ServerVersion));
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         services.AddCors(o => o.AddDefaultPolicy(p => p
             .WithOrigins(config.GetSection("Cors:WebOrigins").Get<string[]>() ?? [])
