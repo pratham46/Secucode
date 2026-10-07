@@ -2,6 +2,7 @@ using Secucode.Api.Auth;
 using Secucode.Api.Features.Exams;
 using Secucode.Api.Features.Masters;
 using Secucode.Api.Features.Roles;
+using Secucode.Api.Features.Runner;
 using Secucode.Api.Features.Users;
 
 namespace Secucode.Api;
@@ -19,5 +20,6 @@ public static class Endpoints
         api.MapRoles();
         api.MapAssignments();
         api.MapExams();
+        api.MapRunner();
     }
 }

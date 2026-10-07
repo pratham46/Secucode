@@ -1,7 +1,10 @@
+using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Secucode.Api.Auth;
@@ -10,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
 using Secucode.Api.Data;
+using Secucode.Api.Features.Runner;
 
 namespace Secucode.Api;
 
@@ -75,6 +79,16 @@ public static class ServiceSetup
         services.AddSingleton<LoginThrottle>();
         services.AddScoped<Caller>();
         services.AddScoped<AuditWriter>();
+        services.Configure<RunnerOptions>(config.GetSection("Runner"));
+        services.AddSingleton<ICodeRunner>(sp => ActivatorUtilities.CreateInstance<LocalCodeRunner>(sp));
+        services.AddRateLimiter(o =>
+        {
+            o.OnRejected = (ctx, _) => new ValueTask(ErrorHandling.WriteAsync(ctx.HttpContext, 429, "Too many requests",
+                "You can run code at most 10 times per minute.", null));
+            o.AddPolicy(RunnerEndpoints.RateLimitPolicy, http => RateLimitPartition.GetFixedWindowLimiter(
+                http.User.FindFirstValue("sub") ?? http.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+        });
         return services;
     }
 
@@ -91,6 +105,7 @@ public static class ServiceSetup
             ctx.RequestServices.GetRequiredService<Caller>().Principal = ctx.User;
             await next(ctx);
         });
+        app.UseRateLimiter();
         if (!app.Environment.IsProduction())
         {
             app.UseSwagger();
