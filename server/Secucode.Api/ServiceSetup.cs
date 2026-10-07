@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
 using Secucode.Api.Data;
 using Secucode.Api.Features.Runner;
+using Secucode.Api.Features.Attempts;
 using Secucode.Api.Features.Live;
 
 namespace Secucode.Api;
@@ -95,6 +96,8 @@ public static class ServiceSetup
         });
         services.AddSignalR().AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         services.AddSingleton<LiveNotifier>();
+        services.Configure<EvidenceOptions>(config.GetSection("Evidence"));
+        services.AddSingleton<EvidenceStore>();
         return services;
     }
 

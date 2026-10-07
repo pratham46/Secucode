@@ -21,7 +21,7 @@ public static class Http
     {
         var body = await r.Content.ReadAsStringAsync();
         Assert.True(r.StatusCode == expected, $"Expected {(int)expected} {expected} but got {(int)r.StatusCode} {r.StatusCode}: {body}");
-        return string.IsNullOrWhiteSpace(body) ? default : JsonDocument.Parse(body).RootElement.Clone();
+        return string.IsNullOrWhiteSpace(body) || r.Content.Headers.ContentType?.MediaType?.Contains("json") != true ? default : JsonDocument.Parse(body).RootElement.Clone();
     }
 
     // Asserts an RFC 7807 problem response and returns its "detail".
