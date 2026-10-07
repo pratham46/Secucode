@@ -51,7 +51,11 @@ public sealed class LocalCodeRunner(IOptions<RunnerOptions> options) : ICodeRunn
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.Environment.Remove("FORCE_COLOR");
+        // Student code must not see the API's secrets (Jwt__Key, connection strings): pass an allow-list only.
+        psi.Environment.Clear();
+        foreach (var name in new[] { "PATH", "PATHEXT", "SystemRoot", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "LANG" })
+            if (Environment.GetEnvironmentVariable(name) is { } value)
+                psi.Environment[name] = value;
         psi.Environment["NO_COLOR"] = "1";
 
         Process proc;
@@ -69,15 +73,16 @@ public sealed class LocalCodeRunner(IOptions<RunnerOptions> options) : ICodeRunn
             // Read both streams concurrently so a chatty program can't fill a pipe and deadlock.
             var stdoutTask = ReadCappedAsync(proc.StandardOutput, maxChars);
             var stderrTask = ReadCappedAsync(proc.StandardError, maxChars);
-            try
-            {
-                await proc.StandardInput.WriteAsync(stdin);
-                proc.StandardInput.Close(); // EOF so input() doesn't wait forever
-            }
-            catch (IOException) { /* exited without reading stdin */ }
-
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(timeout);
+            // Written in the background so a program that never reads stdin can't outlive the time limit;
+            // killing the process on timeout breaks the pipe and ends the writer.
+            _ = Task.Run(async () =>
+            {
+                try { await proc.StandardInput.WriteAsync(stdin); proc.StandardInput.Close(); } // EOF so input() doesn't wait forever
+                catch (IOException) { }
+                catch (ObjectDisposedException) { }
+            });
             var timedOut = false;
             try
             {

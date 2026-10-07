@@ -54,6 +54,25 @@ public sealed class LocalRunnerTests(ApiFixture api)
     }
 
     [Fact]
+    public async Task Unread_stdin_cannot_outlive_the_time_limit()
+    {
+        var r = await Run(await SomeoneAsync(), "Python", "import time; time.sleep(30)", new string('x', 60_000));
+        Assert.True(r.TimedOut);
+    }
+
+    [Fact]
+    public async Task Child_processes_do_not_see_server_secrets()
+    {
+        Environment.SetEnvironmentVariable("Jwt__Key", "leak-check");
+        try
+        {
+            var r = await Run(await SomeoneAsync(), "Python", "import os; print('Jwt__Key' in os.environ, 'ConnectionStrings__Default' in os.environ)");
+            Assert.Equal("False False", r.Stdout.Trim());
+        }
+        finally { Environment.SetEnvironmentVariable("Jwt__Key", null); }
+    }
+
+    [Fact]
     public async Task Unsupported_languages_are_rejected()
     {
         var c = await SomeoneAsync();
