@@ -1,4 +1,5 @@
 using Secucode.Api.Auth;
+using Secucode.Api.Features.Exams;
 using Secucode.Api.Features.Masters;
 using Secucode.Api.Features.Roles;
 using Secucode.Api.Features.Users;
@@ -17,5 +18,6 @@ public static class Endpoints
         api.MapUsers();
         api.MapRoles();
         api.MapAssignments();
+        api.MapExams();
     }
 }
