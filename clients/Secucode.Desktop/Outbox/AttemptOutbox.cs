@@ -7,7 +7,7 @@ namespace Secucode.Desktop.Outbox;
 
 // Disk-backed FIFO of one attempt's writes (spec §6). A single loop sends items in order. Network trouble:
 // wait and retry the same item (1 s doubling to 30 s). 404/409: the attempt is closed, so the queue is dropped.
-// Other 4xx: the server will never accept that item, so it is dropped and the queue moves on.
+// 400/403/413/415: the server will never accept that item, so it is dropped and the queue moves on.
 public sealed class AttemptOutbox : IAsyncDisposable
 {
     private static readonly TimeSpan FirstBackoff = TimeSpan.FromSeconds(1);
@@ -25,6 +25,8 @@ public sealed class AttemptOutbox : IAsyncDisposable
     private long? _inFlight;
     private volatile bool _online = true;
     private volatile bool _closed;
+    private CancellationTokenSource? _backoffWait; // guarded by _items
+    private bool _wakeRequested; // guarded by _items
 
     public event Action<bool>? OnlineChanged;
     public event Action? AttemptClosed;
@@ -36,10 +38,21 @@ public sealed class AttemptOutbox : IAsyncDisposable
         _attemptId = attemptId;
         _sender = sender;
         _delay = delay ?? Task.Delay;
-        _items = Directory.EnumerateFiles(_dir, "*.json")
-            .Select(f => JsonSerializer.Deserialize<OutboxItem>(File.ReadAllText(f), Json.Options)!)
-            .OrderBy(i => i.Seq)
-            .ToList();
+        foreach (var tmp in Directory.EnumerateFiles(_dir, "*.tmp")) TryDelete(tmp);
+        _items = [];
+        foreach (var f in Directory.EnumerateFiles(_dir, "*.json"))
+        {
+            try
+            {
+                _items.Add(JsonSerializer.Deserialize<OutboxItem>(File.ReadAllText(f), Json.Options)
+                    ?? throw new JsonException("null item"));
+            }
+            catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+            {
+                try { File.Move(f, f + ".bad", overwrite: true); } catch (Exception) { TryDelete(f); } // skip unreadable item
+            }
+        }
+        _items.Sort((a, b) => a.Seq.CompareTo(b.Seq));
         _nextSeq = _items.Count == 0 ? 1 : _items[^1].Seq + 1;
     }
 
@@ -73,8 +86,15 @@ public sealed class AttemptOutbox : IAsyncDisposable
             ContentType = webcamJpeg is null ? null : "image/jpeg",
         }, webcamJpeg);
 
-    public void Submit(SubmitRequest request) =>
-        Add(seq => new OutboxItem(seq, OutboxKind.Submit) { Submit = request }, null);
+    public void Submit(SubmitRequest request)
+    {
+        lock (_items)
+        {
+            AddLocked(seq => new OutboxItem(seq, OutboxKind.Submit) { Submit = request }, null);
+            _wakeRequested = true; // a submit must not sit out a long backoff
+            _backoffWait?.Cancel();
+        }
+    }
 
     public void Start() => _loop ??= Task.Run(() => RunAsync(_stop.Token));
 
@@ -132,26 +152,29 @@ public sealed class AttemptOutbox : IAsyncDisposable
 
             try
             {
-                await SendAsync(item, ct);
-                lock (_items) { _inFlight = null; RemoveLocked(item.Seq); }
-                SetOnline(true);
-                backoff = FirstBackoff;
-            }
-            catch (ApiError e) when (e.Status is 404 or 409)
-            {
-                lock (_items)
+                try
                 {
-                    _closed = true;
-                    _inFlight = null;
-                    foreach (var i in _items.ToList()) RemoveLocked(i.Seq);
+                    await SendAsync(item, ct);
+                    lock (_items) { _inFlight = null; RemoveLocked(item.Seq); }
+                    SetOnline(true);
+                    backoff = FirstBackoff;
                 }
-                SetOnline(true);
-                AttemptClosed?.Invoke();
-                return;
-            }
-            catch (ApiError e) when (e.Status is 400 or 403 or 413 or 415)
-            {
-                lock (_items) { _inFlight = null; RemoveLocked(item.Seq); }
+                catch (ApiError e) when (e.Status is 404 or 409)
+                {
+                    lock (_items)
+                    {
+                        _closed = true;
+                        _inFlight = null;
+                        foreach (var i in _items.ToList()) RemoveLocked(i.Seq);
+                    }
+                    SetOnline(true);
+                    Raise(AttemptClosed);
+                    return;
+                }
+                catch (ApiError e) when (e.Status is 400 or 403 or 413 or 415)
+                {
+                    lock (_items) { _inFlight = null; RemoveLocked(item.Seq); }
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -159,10 +182,26 @@ public sealed class AttemptOutbox : IAsyncDisposable
             }
             catch (Exception)
             {
+                // network, 5xx, 401 or anything unexpected: keep the item and try again
                 lock (_items) _inFlight = null;
                 SetOnline(false);
-                try { await _delay(backoff, ct); }
-                catch (OperationCanceledException) { return; }
+                using var wake = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                bool skip;
+                lock (_items)
+                {
+                    skip = _wakeRequested;
+                    _wakeRequested = false;
+                    _backoffWait = wake;
+                }
+                if (skip) { backoff = FirstBackoff; continue; }
+                try { await _delay(backoff, wake.Token); }
+                catch (OperationCanceledException)
+                {
+                    if (ct.IsCancellationRequested) return;
+                    backoff = FirstBackoff; // woken by a submit
+                    continue;
+                }
+                finally { lock (_items) { _backoffWait = null; _wakeRequested = false; } }
                 backoff = backoff * 2 > MaxBackoff ? MaxBackoff : backoff * 2;
             }
         }
@@ -176,14 +215,24 @@ public sealed class AttemptOutbox : IAsyncDisposable
                 await _sender.SaveCodeAsync(_attemptId, item.Code!, ct);
                 break;
             case OutboxKind.Evidence:
-                await _sender.UploadEvidenceAsync(_attemptId, item.Evidence!.Value, File.ReadAllBytes(BinPath(item.Seq)), item.ContentType!, ct);
+                if (File.Exists(BinPath(item.Seq))) // bytes lost: nothing to send, drop the item
+                    await _sender.UploadEvidenceAsync(_attemptId, item.Evidence!.Value, File.ReadAllBytes(BinPath(item.Seq)), item.ContentType!, ct);
                 break;
             case OutboxKind.Event:
                 var evidenceId = item.EvidenceId;
                 if (item.Evidence is { } kind && evidenceId is null)
                 {
-                    evidenceId = await _sender.UploadEvidenceAsync(_attemptId, kind, File.ReadAllBytes(BinPath(item.Seq)), item.ContentType!, ct);
-                    lock (_items) ReplaceLocked(item with { EvidenceId = evidenceId });
+                    try
+                    {
+                        if (!File.Exists(BinPath(item.Seq))) throw new FileNotFoundException();
+                        evidenceId = await _sender.UploadEvidenceAsync(_attemptId, kind, File.ReadAllBytes(BinPath(item.Seq)), item.ContentType!, ct);
+                        lock (_items) ReplaceLocked(item with { EvidenceId = evidenceId });
+                    }
+                    catch (Exception e) when (e is FileNotFoundException or ApiError { Status: 400 or 403 or 413 or 415 })
+                    {
+                        // the frame can't be uploaded; still post the event without it
+                        lock (_items) ReplaceLocked(item with { Evidence = null, ContentType = null });
+                    }
                 }
                 await _sender.RecordEventAsync(_attemptId, new AttemptEventRequest(item.EventType!.Value, item.Detail, evidenceId), ct);
                 break;
@@ -214,14 +263,26 @@ public sealed class AttemptOutbox : IAsyncDisposable
     private void RemoveLocked(long seq)
     {
         _items.RemoveAll(x => x.Seq == seq);
-        File.Delete(JsonPath(seq));
-        File.Delete(BinPath(seq));
+        TryDelete(JsonPath(seq));
+        TryDelete(BinPath(seq));
+    }
+
+    // ponytail: a file that can't be deleted is left behind; it is re-sent after a restart, which the server tolerates.
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+
+    // A throwing listener must never kill the send loop.
+    private static void Raise(Action? a)
+    {
+        try { a?.Invoke(); } catch (Exception) { }
     }
 
     private void SetOnline(bool online)
     {
         if (_online == online) return;
         _online = online;
-        OnlineChanged?.Invoke(online);
+        try { OnlineChanged?.Invoke(online); } catch (Exception) { }
     }
 }

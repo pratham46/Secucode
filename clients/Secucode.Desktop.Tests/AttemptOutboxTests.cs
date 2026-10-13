@@ -141,4 +141,69 @@ public sealed class AttemptOutboxTests : IAsyncLifetime
         Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
         Assert.Equal(["code:a"], _sender.Calls);
     }
+
+    [Fact]
+    public async Task A_throwing_online_listener_does_not_stop_the_queue()
+    {
+        var outbox = New();
+        outbox.OnlineChanged += _ => throw new InvalidOperationException("boom");
+        _sender.FailNext("code:", ApiError.Network(new HttpRequestException("down")));
+        outbox.SaveCode("a", "Python");
+        outbox.Submit(new SubmitRequest("a", "Python", null));
+
+        outbox.Start();
+
+        Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
+        Assert.Equal(["code:a", "submit:a"], _sender.Calls);
+    }
+
+    [Fact]
+    public async Task Corrupt_and_temp_files_are_skipped_on_open()
+    {
+        var first = New();
+        first.SaveCode("good", "Python");
+        await first.DisposeAsync();
+        _open.Remove(first);
+        var dir = Path.Combine(_root, "7");
+        File.WriteAllText(Path.Combine(dir, "0000000050.json"), "{ not json");
+        File.WriteAllText(Path.Combine(dir, "0000000051.json"), "null");
+        File.WriteAllText(Path.Combine(dir, "0000000052.json.tmp"), "half");
+
+        var reopened = New();
+        Assert.Equal(1, reopened.Pending);
+        reopened.Start();
+
+        Assert.True(await reopened.WaitUntilEmptyAsync(Wait));
+        Assert.Equal(["code:good"], _sender.Calls);
+        Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
+    }
+
+    [Fact]
+    public async Task A_rejected_frame_still_posts_the_event_without_evidence()
+    {
+        var outbox = New();
+        _sender.FailNext("evidence:", new ApiError(413, "Payload Too Large", "File must be between 1 byte and 10 MB."));
+        outbox.Event(AttemptEventType.FaceMissing, null, [1, 2, 3]);
+
+        outbox.Start();
+
+        Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
+        Assert.Equal(["event:FaceMissing:"], _sender.Calls);
+    }
+
+    [Fact]
+    public async Task A_submit_queued_during_backoff_is_sent_promptly()
+    {
+        var outbox = new AttemptOutbox(_root, 7, _sender, (_, ct) => Task.Delay(Timeout.Infinite, ct));
+        _open.Add(outbox);
+        _sender.FailNext("code:", ApiError.Network(new HttpRequestException("down")));
+        outbox.SaveCode("a", "Python");
+        outbox.Start();
+        while (outbox.IsOnline) await Task.Delay(10); // now waiting out the backoff
+
+        outbox.Submit(new SubmitRequest("a", "Python", null));
+
+        Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
+        Assert.Equal(["code:a", "submit:a"], _sender.Calls);
+    }
 }
