@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using Secucode.Desktop.Api;
 
@@ -27,9 +28,12 @@ public partial class InfoBar : UserControl
         Glyph.SetResourceReference(TextBlock.ForegroundProperty, edge);
         Glyph.Text = glyph;
         MessageText.Text = message;
-        _action = action;
+        var hasAction = action is not null && !string.IsNullOrEmpty(actionLabel);
+        _action = hasAction ? action : null;
         ActionButton.Content = actionLabel;
-        ActionButton.Visibility = action is null ? Visibility.Collapsed : Visibility.Visible;
+        // Errors interrupt screen readers; other severities wait their turn.
+        AutomationProperties.SetLiveSetting(MessageText, severity == InfoSeverity.Error ? AutomationLiveSetting.Assertive : AutomationLiveSetting.Polite);
+        ActionButton.Visibility = !hasAction ? Visibility.Collapsed : Visibility.Visible;
 
         var wasHidden = Visibility != Visibility.Visible;
         Visibility = Visibility.Visible;

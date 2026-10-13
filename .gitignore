@@ -21,3 +21,5 @@ Database/*backup*.sql
 .env
 # Evidence written by a locally running API
 server/Secucode.Api/evidence/
+
+clients/Secucode_installer/Debug/

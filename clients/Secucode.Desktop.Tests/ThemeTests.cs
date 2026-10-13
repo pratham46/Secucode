@@ -39,4 +39,30 @@ public sealed class ThemeTests
                  })
             Assert.True(controls.Contains(key) || controls.MergedDictionaries.Any(d => d.Contains(key)), $"missing {key}");
     });
+
+    [Fact]
+    public void Button_and_toggle_templates_apply_in_every_state() => Sta.Run(() =>
+    {
+        var res = Load("Controls.xaml");
+        res.MergedDictionaries.Add(Load("Colors.Light.xaml"));
+        var button = new System.Windows.Controls.Button { Style = (Style)res["PrimaryButton"], Content = "x", IsEnabled = false };
+        var toggle = new System.Windows.Controls.CheckBox { Style = (Style)res["ToggleSwitch"], IsChecked = true };
+        foreach (var c in new System.Windows.Controls.Control[] { button, toggle })
+        {
+            c.Resources = res;
+            c.ApplyTemplate();
+            c.Measure(new Size(200, 100));
+        }
+        Assert.NotNull(button.Template.FindName("Overlay", button));
+    });
+
+    [Fact]
+    public void SlideTo_without_an_app_sets_the_value_and_leaves_it_settable() => Sta.Run(() =>
+    {
+        var t = new System.Windows.Media.TranslateTransform();
+        Theme.Transitions.SlideTo(t, 40);
+        Assert.Equal(40, t.Y);
+        t.Y = 5;
+        Assert.Equal(5, t.Y);
+    });
 }
