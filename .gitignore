@@ -1,0 +1,23 @@
+# Build output / IDE
+bin/
+obj/
+.vs/
+*.user
+Secucode_installer/Debug/
+Secucode_installer/Release/
+
+# Runtime data written next to the exe
+SubmittedCodes/
+CapturedFaces/
+TempCodes/
+
+# Local DB backups
+Database/*backup*.sql
+
+# Subagent-driven development scratch (ledgers, briefs, reports)
+.superpowers/
+
+# Local secrets for docker compose
+.env
+# Evidence written by a locally running API
+server/Secucode.Api/evidence/

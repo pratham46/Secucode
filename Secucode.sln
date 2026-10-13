@@ -3,9 +3,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.9.34728.123
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Secucode", "Secucode\Secucode.csproj", "{58B94E9F-9F07-4057-8932-87DF0B1F3F65}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Secucode", "clients\Secucode.Desktop\Secucode.csproj", "{58B94E9F-9F07-4057-8932-87DF0B1F3F65}"
 EndProject
-Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Secucode_installer", "Secucode_installer\Secucode_installer.vdproj", "{C972DE72-A350-4094-B80F-B6084F0529F2}"
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "Secucode_installer", "clients\Secucode_installer\Secucode_installer.vdproj", "{C972DE72-A350-4094-B80F-B6084F0529F2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Checks", "clients\Secucode.Desktop.Checks\Secucode.Checks.csproj", "{86302979-F129-4C63-92DB-3ACE406370AE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server", "server", "{F71B6FFC-9886-4BC9-B506-1FE7C4F23211}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Contracts", "server\Secucode.Contracts\Secucode.Contracts.csproj", "{F049A328-B58C-4041-988E-B8319668EC3C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Api", "server\Secucode.Api\Secucode.Api.csproj", "{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Api.Tests", "server\Secucode.Api.Tests\Secucode.Api.Tests.csproj", "{60E8C9A8-1286-4EC0-90DA-0567CB296376}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,11 +29,32 @@ Global
 		{58B94E9F-9F07-4057-8932-87DF0B1F3F65}.Release|Any CPU.Build.0 = Release|Any CPU
 		{C972DE72-A350-4094-B80F-B6084F0529F2}.Debug|Any CPU.ActiveCfg = Debug
 		{C972DE72-A350-4094-B80F-B6084F0529F2}.Release|Any CPU.ActiveCfg = Release
+		{86302979-F129-4C63-92DB-3ACE406370AE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{86302979-F129-4C63-92DB-3ACE406370AE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{86302979-F129-4C63-92DB-3ACE406370AE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{86302979-F129-4C63-92DB-3ACE406370AE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F049A328-B58C-4041-988E-B8319668EC3C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F049A328-B58C-4041-988E-B8319668EC3C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F049A328-B58C-4041-988E-B8319668EC3C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F049A328-B58C-4041-988E-B8319668EC3C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {68073888-CD22-4FEE-A262-A6EC3CB3B466}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F049A328-B58C-4041-988E-B8319668EC3C} = {F71B6FFC-9886-4BC9-B506-1FE7C4F23211}
+		{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB} = {F71B6FFC-9886-4BC9-B506-1FE7C4F23211}
+		{60E8C9A8-1286-4EC0-90DA-0567CB296376} = {F71B6FFC-9886-4BC9-B506-1FE7C4F23211}
 	EndGlobalSection
 EndGlobal

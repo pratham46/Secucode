@@ -1,0 +1,40 @@
+# Local or server deployment: MySQL + API. The API starts code-runner containers through the host's Docker.
+# Security note: mounting docker.sock gives the API container control of the host's Docker daemon.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-secucode-root}
+      MYSQL_DATABASE: secucode_api
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Secucode.Api/Dockerfile
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Server=mysql;Database=secucode_api;User Id=root;Password=${MYSQL_ROOT_PASSWORD:-secucode-root};"
+      Jwt__Key: ${JWT_KEY:?Set JWT_KEY in .env to a random string of at least 32 characters}
+      Seed__AdminPassword: ${Seed__AdminPassword:-}
+      Runner__Mode: Docker
+      Runner__DockerEndpoint: unix:///var/run/docker.sock
+      Evidence__Root: /data/evidence
+      Cors__WebOrigins__0: ${WEB_ORIGIN:-http://localhost:5173}
+    ports:
+      - "8080:8080"
+    volumes:
+      - evidence:/data/evidence
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  mysql-data:
+  evidence:
