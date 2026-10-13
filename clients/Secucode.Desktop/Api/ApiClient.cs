@@ -75,15 +75,75 @@ public sealed partial class ApiClient(HttpClient http)
             return req;
         }, ct, authenticated);
 
+    private Task<bool>? _refreshing;
+
+    // Raised (on a background thread) when the server refused to refresh: the user must sign in again.
+    public event EventHandler? SessionExpired;
+
     // `build` makes a fresh request each time: a request message can be sent only once, and a retry needs another.
     internal async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> build, CancellationToken ct, bool authenticated = true)
     {
+        var usedToken = AccessToken;
         var res = await SendOnceAsync(build, authenticated, ct);
+        if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized && authenticated && usedToken is not null)
+        {
+            res.Dispose();
+            if (!await RefreshAsync(usedToken))
+            {
+                ClearTokens();
+                SessionExpired?.Invoke(this, EventArgs.Empty);
+                throw new ApiError(401, "Session expired", "Your session expired. Please sign in again.");
+            }
+            res = await SendOnceAsync(build, authenticated, ct);
+        }
         if (!res.IsSuccessStatusCode)
         {
             using (res) throw await ApiError.FromResponseAsync(res);
         }
         return res;
+    }
+
+    // For SignalR: a token that is valid for at least another minute. Offline, the old token is returned and the hub retries.
+    public async Task<string?> FreshAccessTokenAsync()
+    {
+        string? token;
+        DateTime expires;
+        lock (_gate) { token = _accessToken; expires = _expiresAt; }
+        if (token is null) return null;
+        if (expires - DateTime.UtcNow > TimeSpan.FromMinutes(1)) return token;
+        try { await RefreshAsync(token); }
+        catch (ApiError) { }
+        return AccessToken;
+    }
+
+    // Concurrent 401s share one refresh. A caller whose token was already replaced just retries with the new one.
+    private Task<bool> RefreshAsync(string staleToken)
+    {
+        lock (_gate)
+        {
+            if (_accessToken != staleToken) return Task.FromResult(_accessToken is not null);
+            if (_refreshToken is null) return Task.FromResult(false);
+            return _refreshing ??= DoRefreshAsync(_refreshToken);
+        }
+    }
+
+    private async Task<bool> DoRefreshAsync(string refreshToken)
+    {
+        await Task.Yield(); // makes sure _refreshing is assigned before the finally below clears it
+        try
+        {
+            using var res = await SendOnceAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/auth/refresh")
+            {
+                Content = JsonContent.Create(new RefreshRequest(refreshToken), options: Json.Options),
+            }, authenticated: false, default);
+            if (!res.IsSuccessStatusCode) return false;
+            SetTokens((await res.Content.ReadFromJsonAsync<LoginResponse>(Json.Options))!);
+            return true;
+        }
+        finally
+        {
+            lock (_gate) _refreshing = null;
+        }
     }
 
     private async Task<HttpResponseMessage> SendOnceAsync(Func<HttpRequestMessage> build, bool authenticated, CancellationToken ct)
