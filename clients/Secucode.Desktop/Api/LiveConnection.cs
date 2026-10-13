@@ -38,7 +38,7 @@ public sealed class LiveConnection : IAsyncDisposable
 
     public async Task StartAsync(CancellationToken ct = default)
     {
-        await _hub.StartAsync(ct);
+        if (_hub.State == HubConnectionState.Disconnected) await _hub.StartAsync(ct);
         // The server joins our private group after StartAsync returns; a round-trip guarantees it has happened.
         await _hub.InvokeAsync("LeaveExam", 0, ct);
         await RaiseConnectedAsync();
@@ -66,7 +66,10 @@ public sealed class LiveConnection : IAsyncDisposable
     {
         if (Connected is { } handler)
             foreach (var h in handler.GetInvocationList().Cast<Func<Task>>())
-                await h();
+                {
+                try { await h(); }
+                catch (Exception) { /* a faulty listener must not fail the connection or starve the others */ }
+            }
     }
 
     public ValueTask DisposeAsync() => _hub.DisposeAsync();

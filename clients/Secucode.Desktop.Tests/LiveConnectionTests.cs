@@ -38,4 +38,21 @@ public sealed class LiveConnectionTests(ApiFixture api)
         Assert.Equal(attempt.DeadlineAt.AddMinutes(10), message.DeadlineAt, TimeSpan.FromSeconds(1));
         Assert.Equal(1, connected);
     }
+
+    [Fact]
+    public async Task A_throwing_Connected_handler_does_not_break_start()
+    {
+        var server = api.Factory.Server;
+        var user = await _world.UserAsync(RoleNames.Student, (await _world.SectionAsync()).Batch);
+        var student = new ApiClient(api.Factory.CreateClient());
+        await student.LoginAsync(user.Username, World.Password);
+        await using var live = new LiveConnection(server.BaseAddress, student.FreshAccessTokenAsync,
+            () => server.CreateHandler(), HttpTransportType.LongPolling);
+        var calls = 0;
+        live.Connected += () => { calls++; throw new InvalidOperationException("boom"); };
+
+        await live.StartWithRetryAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, calls);
+    }
 }
