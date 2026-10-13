@@ -1,0 +1,8 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Every duration and easing in the app comes from here (spec §8). -->
+    <Duration x:Key="Motion.Fast">0:0:0.1</Duration>
+    <Duration x:Key="Motion.Pop">0:0:0.15</Duration>
+    <Duration x:Key="Motion.Page">0:0:0.2</Duration>
+    <CubicEase x:Key="Motion.EaseOut" EasingMode="EaseOut"/>
+</ResourceDictionary>
