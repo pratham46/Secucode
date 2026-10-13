@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Net.Http.Json;
 using Secucode.Api.Auth;
 using Secucode.Api.Tests.Infrastructure;
 using Secucode.Contracts;
@@ -81,5 +82,75 @@ public sealed class ApiClientRefreshTests(ApiFixture api)
 
         Assert.Equal(401, e.Status);
         Assert.Equal(0, counter.Count("/api/auth/refresh"));
+    }
+
+    private sealed class FuncHandler(HttpMessageHandler inner, Func<HttpRequestMessage, Task<HttpResponseMessage?>> intercept) : DelegatingHandler(inner)
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            await intercept(request) ?? await base.SendAsync(request, ct);
+    }
+
+    [Fact]
+    public async Task Concurrent_calls_with_a_revoked_session_raise_SessionExpired_once()
+    {
+        var (client, _, _) = await SignedInAsync();
+        var expired = 0;
+        client.SessionExpired += (_, _) => Interlocked.Increment(ref expired);
+        client.AccessToken = "not-a-valid-token";
+        client.RefreshToken = "revoked-or-unknown";
+
+        var calls = Enumerable.Range(0, 5).Select(async _ =>
+            await Assert.ThrowsAsync<ApiError>(() => client.SendAsync<MeResponse>(HttpMethod.Get, "api/auth/me", null, default)));
+        var errors = await Task.WhenAll(calls);
+
+        Assert.All(errors, e => Assert.Equal(401, e.Status));
+        Assert.Equal(1, expired);
+    }
+
+    [Fact]
+    public async Task A_server_error_during_refresh_keeps_the_session()
+    {
+        var s = await _world.SectionAsync();
+        var user = await _world.UserAsync(RoleNames.Faculty, s.Department);
+        var down = new FuncHandler(api.Factory.Server.CreateHandler(), r =>
+            Task.FromResult<HttpResponseMessage?>(r.RequestUri!.AbsolutePath == "/api/auth/refresh"
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable) : null));
+        var client = new ApiClient(new HttpClient(down) { BaseAddress = api.Factory.Server.BaseAddress });
+        await client.LoginAsync(user.Username, World.Password);
+        var expired = 0;
+        client.SessionExpired += (_, _) => expired++;
+        client.AccessToken = "not-a-valid-token";
+
+        var e = await Assert.ThrowsAsync<ApiError>(() => client.SendAsync<MeResponse>(HttpMethod.Get, "api/auth/me", null, default));
+
+        Assert.Equal(503, e.Status);
+        Assert.True(client.IsSignedIn);
+        Assert.Equal(0, expired);
+    }
+
+    [Fact]
+    public async Task Logout_with_an_expired_access_token_revokes_the_rotated_refresh_token()
+    {
+        var s = await _world.SectionAsync();
+        var user = await _world.UserAsync(RoleNames.Faculty, s.Department);
+        string? sent = null;
+        var spy = new FuncHandler(api.Factory.Server.CreateHandler(), async r =>
+        {
+            if (r.RequestUri!.AbsolutePath == "/api/auth/logout")
+                sent = await r.Content!.ReadAsStringAsync();
+            return null;
+        });
+        var client = new ApiClient(new HttpClient(spy) { BaseAddress = api.Factory.Server.BaseAddress });
+        await client.LoginAsync(user.Username, World.Password);
+        var original = client.RefreshToken!;
+        var expired = 0;
+        client.SessionExpired += (_, _) => expired++;
+        client.AccessToken = "not-a-valid-token";
+
+        await client.LogoutAsync();
+        Assert.False(client.IsSignedIn);
+        Assert.Equal(0, expired);
+        Assert.NotNull(sent);
+        Assert.DoesNotContain(original, sent); // the last logout send carries the rotated token
     }
 }

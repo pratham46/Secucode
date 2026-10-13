@@ -32,11 +32,16 @@ public sealed partial class ApiClient(HttpClient http)
 
     public async Task LogoutAsync()
     {
-        var refresh = RefreshToken;
         try
         {
-            if (refresh is not null)
-                using (await SendAsync(HttpMethod.Post, "api/auth/logout", new RefreshRequest(refresh), default)) { }
+            if (RefreshToken is not null)
+            {
+                // The token is read per send: a 401 may rotate it via refresh before the retry. Logout is already ending the session, so no SessionExpired.
+                using var _ = await SendAsync(() => new HttpRequestMessage(HttpMethod.Post, "api/auth/logout")
+                {
+                    Content = JsonContent.Create(new RefreshRequest(RefreshToken ?? ""), options: Json.Options),
+                }, default, signalExpiry: false);
+            }
         }
         catch (ApiError) { } // signing out locally matters more than telling the server
         finally { ClearTokens(); }
@@ -47,10 +52,13 @@ public sealed partial class ApiClient(HttpClient http)
         lock (_gate) { _accessToken = r.AccessToken; _refreshToken = r.RefreshToken; _expiresAt = r.ExpiresAt; }
     }
 
-    private void ClearTokens()
+    // Returns true only for the call that actually signed the user out.
+    private bool ClearTokens()
     {
-        lock (_gate) { _accessToken = null; _refreshToken = null; }
+        bool was;
+        lock (_gate) { was = _accessToken is not null; _accessToken = null; _refreshToken = null; }
         Me = null;
+        return was;
     }
 
     // ---- transport ----
@@ -81,7 +89,7 @@ public sealed partial class ApiClient(HttpClient http)
     public event EventHandler? SessionExpired;
 
     // `build` makes a fresh request each time: a request message can be sent only once, and a retry needs another.
-    internal async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> build, CancellationToken ct, bool authenticated = true)
+    internal async Task<HttpResponseMessage> SendAsync(Func<HttpRequestMessage> build, CancellationToken ct, bool authenticated = true, bool signalExpiry = true)
     {
         var usedToken = AccessToken;
         var res = await SendOnceAsync(build, authenticated, ct);
@@ -90,8 +98,7 @@ public sealed partial class ApiClient(HttpClient http)
             res.Dispose();
             if (!await RefreshAsync(usedToken))
             {
-                ClearTokens();
-                SessionExpired?.Invoke(this, EventArgs.Empty);
+                if (ClearTokens() && signalExpiry) SessionExpired?.Invoke(this, EventArgs.Empty);
                 throw new ApiError(401, "Session expired", "Your session expired. Please sign in again.");
             }
             res = await SendOnceAsync(build, authenticated, ct);
@@ -136,8 +143,14 @@ public sealed partial class ApiClient(HttpClient http)
             {
                 Content = JsonContent.Create(new RefreshRequest(refreshToken), options: Json.Options),
             }, authenticated: false, default);
-            if (!res.IsSuccessStatusCode) return false;
-            SetTokens((await res.Content.ReadFromJsonAsync<LoginResponse>(Json.Options))!);
+            if (res.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden) return false;
+            if (!res.IsSuccessStatusCode) throw await ApiError.FromResponseAsync(res); // 5xx, 429...: not a refusal, keep the session
+            var login = (await res.Content.ReadFromJsonAsync<LoginResponse>(Json.Options))!;
+            lock (_gate)
+            {
+                if (_refreshToken != refreshToken) return false; // signed out (or replaced) while refreshing
+                SetTokens(login);
+            }
             return true;
         }
         finally
