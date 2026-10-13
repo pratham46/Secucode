@@ -9,7 +9,7 @@ public sealed record LoginResponse(string AccessToken, string RefreshToken, Date
 public sealed record UserDto(int Id, string Username, string FullName, string? Email, bool IsActive, bool HasPin, IReadOnlyList<AssignmentDto> Assignments);
 
 public sealed record AssignmentDto(int Id, int RoleId, string RoleName, int? BranchId, int? ClassId, int? BatchId,
-    DateOnly? ValidFrom, DateOnly? ValidTo, bool IsActive);
+    DateOnly? ValidFrom, DateOnly? ValidTo, bool IsActive, bool IsStudent);
 
 public sealed record EffectiveCapabilityDto(Capability Capability, Reach Reach, ScopeDto Scope, string RoleName);
 

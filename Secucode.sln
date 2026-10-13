@@ -17,6 +17,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Api", "server\Secu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Api.Tests", "server\Secucode.Api.Tests\Secucode.Api.Tests.csproj", "{60E8C9A8-1286-4EC0-90DA-0567CB296376}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "clients", "clients", "{59DEB8B0-1167-4A03-B346-D4B04954D3D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Secucode.Desktop.Tests", "clients\Secucode.Desktop.Tests\Secucode.Desktop.Tests.csproj", "{07F47CBB-4F14-4B8D-AAA1-AACA736B8BC1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +49,10 @@ Global
 		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{60E8C9A8-1286-4EC0-90DA-0567CB296376}.Release|Any CPU.Build.0 = Release|Any CPU
+		{07F47CBB-4F14-4B8D-AAA1-AACA736B8BC1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{07F47CBB-4F14-4B8D-AAA1-AACA736B8BC1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{07F47CBB-4F14-4B8D-AAA1-AACA736B8BC1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{07F47CBB-4F14-4B8D-AAA1-AACA736B8BC1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -56,5 +64,6 @@ Global
 		{F049A328-B58C-4041-988E-B8319668EC3C} = {F71B6FFC-9886-4BC9-B506-1FE7C4F23211}
 		{0FB04A74-0B85-4234-BAD1-7F861A8BDAEB} = {F71B6FFC-9886-4BC9-B506-1FE7C4F23211}
 		{60E8C9A8-1286-4EC0-90DA-0567CB296376} = {F71B6FFC-9886-4BC9-B506-1FE7C4F23211}
+		{07F47CBB-4F14-4B8D-AAA1-AACA736B8BC1} = {59DEB8B0-1167-4A03-B346-D4B04954D3D3}
 	EndGlobalSection
 EndGlobal
