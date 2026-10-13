@@ -94,7 +94,7 @@ clients/Secucode.Desktop/
 - Each item is a file: `{seq}.json` for events/code saves/submit, plus a sibling file for evidence bytes. Evidence events are linked by uploading the evidence first and filling `evidenceId` on the following event.
 - A single sender sends items in order. On network failure it retries with backoff (1 s doubling to 30 s) and keeps the queue on disk. Items are deleted once the server accepts them.
 - **Offline banner** while the sender is failing: "Offline — your work is saved on this PC and will be sent when the connection returns."
-- **Submit** is the last item. It is retried until `DeadlineAt + 30 s` (server time). After that, the server has auto-submitted the last saved code; the window says so, keeps sending the remaining evidence, then closes.
+- **Submit** is the last item. It is retried until `DeadlineAt + 30 s` (server time). After that, the server has auto-submitted the last saved code; the window says so and closes. The API rejects writes to a closed attempt, so anything still queued (normally only evidence captured while offline) gets a 409 and is discarded — items are sent in order, so everything queued before the outage has already gone.
 - **409** on any item means the attempt is no longer in progress: proctoring stops, the queue is discarded, and the window explains why (submitted, auto-submitted, or voided — read from `GET /attempts/{id}`).
 - **Crash or restart:** on resume (section 5), any leftover outbox for that attempt is sent before new items.
 - A local copy of the code is also written on every auto-save, as today.
@@ -102,7 +102,7 @@ clients/Secucode.Desktop/
 ## 7. Staff flow
 
 - **Exam list** — `GET /exams` → `ExamDto` grid (title, window, duration, mode, active). Filter by date range.
-- **Exam editor** — create (`POST /exams`) or edit (`PUT /exams/{id}`): title, start/end (local time, sent as UTC), duration, mode (`DesktopOnly`/`WebAllowed`), PIN, active, questions (add/remove/reorder). If questions are locked after attempts, the 403 reason is shown.
+- **Exam editor** — create (`POST /exams`) or edit (`PUT /exams/{id}`): title, start/end (local time, sent as UTC), duration, mode (`DesktopOnly`/`WebAllowed`), target (department, optional year, optional batch — from `GET /branches`, `/classes`, `/batches`), the four per-exam switches, active, questions (add/remove/reorder). There is no exam PIN: the PIN is each student's own (set by staff in user management). If questions are locked after attempts, the 403 reason is shown.
 - **Activate/deactivate** (`PATCH /exams/{id}/active`) and **delete** (`DELETE`; a 409 suggests deactivating).
 - **Attempts** — `GET /exams/{id}/attempts` → `AttemptSummaryDto` grid (student, status, client, start, submitted, strikes). Selecting one shows `GET /attempts/{id}`: question, code, submit reason, event list. Evidence viewing, corrections and the live monitor are out of scope (section 11).
 
