@@ -206,4 +206,49 @@ public sealed class AttemptOutboxTests : IAsyncLifetime
         Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
         Assert.Equal(["code:a", "submit:a"], _sender.Calls);
     }
+
+    // Fails the first code save only after the test releases it, so a Submit can land while the send is in flight.
+    private sealed class GatedSender(FakeSender inner) : IAttemptSender
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _first = 1;
+
+        public async Task SaveCodeAsync(int attemptId, SaveCodeRequest request, CancellationToken ct)
+        {
+            if (Interlocked.Exchange(ref _first, 0) == 1)
+            {
+                Entered.SetResult();
+                await Release.Task;
+                throw ApiError.Network(new HttpRequestException("down"));
+            }
+            await inner.SaveCodeAsync(attemptId, request, ct);
+        }
+
+        public Task<long> UploadEvidenceAsync(int attemptId, EvidenceKind kind, byte[] bytes, string contentType, CancellationToken ct) =>
+            inner.UploadEvidenceAsync(attemptId, kind, bytes, contentType, ct);
+        public Task RecordEventAsync(int attemptId, AttemptEventRequest request, CancellationToken ct) =>
+            inner.RecordEventAsync(attemptId, request, ct);
+        public Task SubmitAsync(int attemptId, SubmitRequest request, CancellationToken ct) =>
+            inner.SubmitAsync(attemptId, request, ct);
+    }
+
+    [Fact]
+    public async Task Submit_after_the_skip_path_does_not_touch_a_disposed_wait()
+    {
+        var gated = new GatedSender(_sender);
+        var outbox = new AttemptOutbox(_root, 7, gated, (_, ct) => Task.Delay(Timeout.Infinite, ct));
+        _open.Add(outbox);
+        outbox.SaveCode("a", "Python");
+        outbox.Start();
+        await gated.Entered.Task.WaitAsync(Wait);
+        outbox.Submit(new SubmitRequest("a", "Python", "first")); // queued while the send is in flight
+        gated.Release.SetResult();                                 // that send fails -> skip path, no backoff
+        while (_sender.Calls.Count == 0) await Task.Delay(10);
+
+        outbox.Submit(new SubmitRequest("a", "Python", "second")); // must not throw
+
+        Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
+        Assert.Equal(["code:a", "submit:a", "submit:a"], _sender.Calls);
+    }
 }

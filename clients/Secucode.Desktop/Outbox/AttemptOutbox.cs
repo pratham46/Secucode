@@ -191,7 +191,7 @@ public sealed class AttemptOutbox : IAsyncDisposable
                 {
                     skip = _wakeRequested;
                     _wakeRequested = false;
-                    _backoffWait = wake;
+                    if (!skip) _backoffWait = wake; // never publish a CTS that is about to be disposed
                 }
                 if (skip) { backoff = FirstBackoff; continue; }
                 try { await _delay(backoff, wake.Token); }
