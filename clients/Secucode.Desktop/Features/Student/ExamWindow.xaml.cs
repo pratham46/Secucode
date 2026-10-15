@@ -281,6 +281,7 @@ public partial class ExamWindow : Window
     public void SignedOut()
     {
         if (_finishing || _canClose) return;
+        Save(); // edits since the last save tick go to the on-disk outbox and are sent on resume
         _session.Abandon("Signed out");
         StopProctoring();
         _canClose = true;

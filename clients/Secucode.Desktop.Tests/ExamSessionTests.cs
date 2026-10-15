@@ -123,6 +123,18 @@ public sealed class ExamSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Code_saved_before_abandoning_stays_queued_for_resume()
+    {
+        var session = New();
+
+        session.SaveCode("latest", "Python");
+        session.Abandon("Signed out");
+        session.SaveCode("after", "Python");
+
+        Assert.Equal(new SaveCodeRequest("latest", "Python"), Assert.Single(_outbox.Snapshot()).Code);
+    }
+
+    [Fact]
     public void A_live_deadline_change_moves_the_clock_for_this_attempt_only()
     {
         var session = New();
