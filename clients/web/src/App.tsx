@@ -2,12 +2,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 'react-router-dom';
 import { ApiClient, ApiError } from './api/client';
-import { AuthProvider, RequireAuth, StaffOnly } from './auth/AuthContext';
+import { AuthProvider, RequireAuth, StaffOnly, StudentOnly } from './auth/AuthContext';
 import { ExamsHome } from './features/exams/ExamsHome';
 import { AttemptDetailPage } from './features/staff/AttemptDetailPage';
 import { AttemptListPage } from './features/staff/AttemptListPage';
 import { ExamEditorPage } from './features/staff/ExamEditorPage';
 import { LoginPage } from './features/login/LoginPage';
+import { ExamStartPage } from './features/student/ExamStartPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { AppShell } from './shell/AppShell';
 
@@ -23,7 +24,7 @@ export const routes: RouteObject[] = [
       { path: '/exams/:id/edit', element: <StaffOnly><ExamEditorPage /></StaffOnly> },
       { path: '/exams/:id/attempts', element: <StaffOnly><AttemptListPage /></StaffOnly> },
       { path: '/attempts/:id', element: <StaffOnly><AttemptDetailPage /></StaffOnly> },
-      // More staff routes (Task 8) and student routes (Task 12) go here.
+      { path: '/exams/:id/start', element: <StudentOnly><ExamStartPage /></StudentOnly> },
       { path: '/settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/exams" replace /> },
     ],

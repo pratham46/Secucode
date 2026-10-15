@@ -1,0 +1,7 @@
+.start-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.start-preview {
+  width: 100%; aspect-ratio: 4 / 3; border-radius: var(--radius-card);
+  background: var(--surface-sunken); object-fit: cover; transform: scaleX(-1);
+}
+.rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+@media (max-width: 899px) { .start-grid { grid-template-columns: 1fr; } }
