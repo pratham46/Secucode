@@ -45,3 +45,6 @@
 .evidence { margin: 0; display: grid; gap: 6px; }
 .evidence img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-sunken); }
 .evidence audio { width: 100%; }
+
+.exam-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.exam-card { display: grid; gap: 12px; align-content: start; }
