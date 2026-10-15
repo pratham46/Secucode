@@ -194,6 +194,24 @@ public sealed class AttemptTests(ApiFixture api)
     }
 
     [Fact]
+    public async Task Browser_audio_in_webm_is_accepted_as_evidence()
+    {
+        var x = await SetupAsync();
+        var student = await _world.LoginAsync(x.Student, ClientKind.Web);
+        var attempt = await (await Start(student, x.ExamId)).ReadAsync<AttemptDto>(HttpStatusCode.Created);
+        var webm = new byte[] { 0x1A, 0x45, 0xDF, 0xA3, 1, 2, 3 };
+        var file = new ByteArrayContent(webm);
+        file.Headers.ContentType = new MediaTypeHeaderValue("audio/webm");
+        var form = new MultipartFormDataContent { { new StringContent("Audio"), "kind" }, { file, "file", "chunk.webm" } };
+
+        var evidence = await (await student.PostAsync($"/api/attempts/{attempt.Id}/evidence", form)).ReadAsync<EvidenceDto>(HttpStatusCode.Created);
+
+        Assert.Equal("audio/webm", evidence.ContentType);
+        var author = await _world.LoginAsync(x.Author);
+        Assert.Equal(webm, await (await author.GetAsync($"/api/evidence/{evidence.Id}")).Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task Staff_with_ViewResults_list_attempts_and_watch_them_start_live()
     {
         var x = await SetupAsync();
