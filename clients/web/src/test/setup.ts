@@ -6,3 +6,11 @@ afterEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
+
+// react-router builds a Request with a jsdom AbortSignal, which Node's fetch rejects; drop the signal in tests.
+const NodeRequest = globalThis.Request;
+globalThis.Request = class extends NodeRequest {
+  constructor(input: RequestInfo | URL, init?: RequestInit) {
+    super(input, init && { ...init, signal: undefined });
+  }
+};
