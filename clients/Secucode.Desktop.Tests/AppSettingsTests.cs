@@ -26,6 +26,7 @@ public sealed class AppSettingsTests : IDisposable
     {
         new AppSettings { ApiBaseUrl = "http://exam-server:9000", Theme = ThemeChoice.Dark }.Save();
 
+        Assert.DoesNotContain("baseUri", File.ReadAllText(Path.Combine(_dir, "settings.json")), StringComparison.OrdinalIgnoreCase);
         var loaded = AppSettings.Load();
 
         Assert.Equal(ThemeChoice.Dark, loaded.Theme);

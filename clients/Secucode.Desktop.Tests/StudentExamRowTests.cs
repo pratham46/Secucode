@@ -37,6 +37,16 @@ public sealed class StudentExamRowTests
     }
 
     [Fact]
+    public void A_pc_clock_a_few_minutes_off_does_not_block_start()
+    {
+        Assert.True(Row(3).CanStart); // opens in 3 min by this PC's clock: the server decides
+        Assert.StartsWith("Opens ", Row(3).ActionLabel); // the label stays a hint
+        Assert.True(Row(-123).CanStart); // closed 3 min ago by this PC's clock
+        Assert.False(Row(6).CanStart);
+        Assert.False(Row(-126).CanStart);
+    }
+
+    [Fact]
     public void Details_read_naturally()
     {
         var row = Row(-5);

@@ -251,4 +251,20 @@ public sealed class AttemptOutboxTests : IAsyncLifetime
         Assert.True(await outbox.WaitUntilEmptyAsync(Wait));
         Assert.Equal(["code:a", "submit:a", "submit:a"], _sender.Calls);
     }
+
+    [Fact]
+    public async Task Sweep_deletes_only_folders_of_attempts_the_server_says_are_finished()
+    {
+        foreach (var name in new[] { "1", "2", "3", "4", "notes" }) Directory.CreateDirectory(Path.Combine(_root, name));
+        var asked = new List<int>();
+
+        await AttemptOutbox.SweepAsync(_root, keep: new HashSet<int> { 2 }, isFinished: id =>
+        {
+            asked.Add(id);
+            return Task.FromResult(id == 1 ? true : id == 3 ? false : throw new ApiError(404, "Not found", "Not found"));
+        });
+
+        Assert.Equal([1, 3, 4], asked.Order()); // never asks about an in-progress attempt
+        Assert.Equal(["2", "3", "4", "notes"], Directory.EnumerateDirectories(_root).Select(Path.GetFileName).Order());
+    }
 }

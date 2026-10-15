@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Secucode.Contracts;
 
 namespace Secucode.Desktop;
@@ -12,6 +13,7 @@ public sealed class AppSettings
     public string ApiBaseUrl { get; set; } = "http://localhost:8080/";
     public ThemeChoice Theme { get; set; } = ThemeChoice.System;
 
+    [JsonIgnore]
     public Uri BaseUri => new(ApiBaseUrl.EndsWith('/') ? ApiBaseUrl : ApiBaseUrl + "/");
 
     // Settable so tests can point it at a temp folder.

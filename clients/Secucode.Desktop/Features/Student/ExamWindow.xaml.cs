@@ -50,9 +50,10 @@ public partial class ExamWindow : Window
 
         ExamTitle.Text = examTitle;
         QuestionText.Text = attempt.QuestionText;
-        CodeEditor.Text = attempt.Code;
+        var (code, language) = _session.LatestCode();
+        CodeEditor.Text = code;
         LanguageBox.ItemsSource = Languages;
-        LanguageBox.SelectedItem = Languages.Contains(attempt.Language) ? attempt.Language : "Python";
+        LanguageBox.SelectedItem = Languages.Contains(language) ? language : "Python";
 
         _outbox.Evidence(EvidenceKind.ReferenceFace, referencePng, "image/png");
         _outbox.OnlineChanged += online => Dispatcher.BeginInvoke(() => ShowConnection(online));
@@ -97,6 +98,8 @@ public partial class ExamWindow : Window
         if (!_audio.Start(out var audioError)) _session.AudioUnavailable(audioError ?? "No microphone.");
 
         _tick.Tick += (_, _) => Tick();
+        // ponytail: face check and screenshot run on the UI thread, which also services the low-level keyboard hook;
+        // a camera stall past Windows' LowLevelHooksTimeout can silently remove the hook. Upgrade: capture off the UI thread.
         _faceTimer.Tick += (_, _) =>
         {
             (FaceCheck result, byte[]? jpeg) check;
@@ -235,14 +238,18 @@ public partial class ExamWindow : Window
         OverlayTitle.Text = "Submitting…";
         OverlayText.Text = "Sending your code and evidence.";
 
-        while (_outbox.Pending > 0 && !_outbox.Closed && !_session.Clock.PastSubmitGrace(DateTime.UtcNow))
+        while (_outbox.Pending > 0 && !_outbox.Closed && _api.IsSignedIn && !_session.Clock.PastSubmitGrace(DateTime.UtcNow))
         {
             if (!_outbox.IsOnline)
                 OverlayText.Text = "Offline — your submission will be sent when the connection returns. Keep this window open.";
             await Task.Delay(500);
         }
 
-        (OverlayTitle.Text, OverlayText.Text) = await OutcomeAsync();
+        // Signed out: the outbox can't send, so don't hold the student here. The queued submit stays on disk and
+        // goes first when the attempt is resumed.
+        (OverlayTitle.Text, OverlayText.Text) = _api.IsSignedIn || _outbox.Pending == 0 || _outbox.Closed
+            ? await OutcomeAsync()
+            : ("Signed out", "You were signed out. Sign in and choose Resume to finish submitting.");
         OverlayButton.Visibility = Visibility.Visible;
         Topmost = false;
     }

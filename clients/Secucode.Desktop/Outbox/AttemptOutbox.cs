@@ -58,6 +58,22 @@ public sealed class AttemptOutbox : IAsyncDisposable
 
     public static string DefaultRoot => Path.Combine(AppSettings.DataDir, "outbox");
 
+    // Deletes leftover attempt folders (webcam frames, audio) once the server says the attempt is finished. Folders in
+    // `keep` (in progress) are never touched; any error (offline, another student's attempt: 404) keeps the folder.
+    public static async Task SweepAsync(string rootDir, IReadOnlySet<int> keep, Func<int, Task<bool>> isFinished)
+    {
+        if (!Directory.Exists(rootDir)) return;
+        foreach (var dir in Directory.EnumerateDirectories(rootDir))
+        {
+            if (!int.TryParse(Path.GetFileName(dir), out var id) || keep.Contains(id)) continue;
+            try
+            {
+                if (await isFinished(id)) Directory.Delete(dir, recursive: true);
+            }
+            catch (Exception) { } // ponytail: kept; the next list load tries again
+        }
+    }
+
     public bool IsOnline => _online;
     public bool Closed => _closed;
     public int Pending { get { lock (_items) return _items.Count; } }

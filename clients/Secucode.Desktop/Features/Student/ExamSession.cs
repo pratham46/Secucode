@@ -24,6 +24,16 @@ public sealed class ExamSession(AttemptDto attempt, AttemptOutbox outbox, Func<D
     // The server closed the attempt (voided, or no longer in progress): stop without submitting.
     public event Action<string>? Closed;
 
+    // What the editor starts with: the newest code still queued on this PC (saved offline, before a crash or a
+    // sign-out), else the server's copy. Otherwise the next autosave would overwrite that unsent work.
+    public (string Code, string Language) LatestCode()
+    {
+        var last = outbox.Snapshot().LastOrDefault(i => i.Code is not null || i.Submit is not null);
+        return last?.Code is { } save ? (save.Code, save.Language)
+            : last?.Submit is { } submit ? (submit.Code, submit.Language)
+            : (Attempt.Code, Attempt.Language ?? "Python");
+    }
+
     public void SaveCode(string code, string language)
     {
         if (!Ended) outbox.SaveCode(code, language);

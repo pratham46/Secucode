@@ -193,4 +193,16 @@ public sealed class ExamSessionTests : IAsyncLifetime
         session.SaveCode("b", "Java");
         Assert.Equal(new SaveCodeRequest("b", "Java"), Assert.Single(_outbox.Snapshot()).Code);
     }
+
+    [Fact]
+    public async Task On_resume_the_editor_shows_the_newest_code_still_queued_on_this_pc()
+    {
+        Assert.Equal(("", "Python"), New().LatestCode()); // nothing queued: the server's copy
+
+        _outbox.SaveCode("offline edit", "Java");
+        await _outbox.DisposeAsync();
+        _outbox = new AttemptOutbox(_root, 3, new FakeSender()); // restored from disk, as after a crash
+
+        Assert.Equal(("offline edit", "Java"), New().LatestCode());
+    }
 }
