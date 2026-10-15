@@ -26,6 +26,10 @@ public static class ServiceSetup
         services.TryAddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
         services.AddProblemDetails();
+        // MediaPipe's face model is a .tflite file, which the default type map doesn't know (unknown types aren't served).
+        var types = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+        types.Mappings[".tflite"] = "application/octet-stream";
+        services.Configure<StaticFileOptions>(o => o.ContentTypeProvider = types);
         services.Configure<StaticFileOptions>(o => o.OnPrepareResponse = ctx =>
         {
             ctx.Context.Response.Headers.ContentSecurityPolicy = WebApp.ContentSecurityPolicy;

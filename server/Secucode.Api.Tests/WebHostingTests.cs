@@ -44,6 +44,21 @@ public sealed class WebHostingTests(ApiFixture api) : IDisposable
         Assert.True(res.Headers.Contains("Content-Security-Policy"));
     }
 
+    [Theory]
+    [InlineData("blaze_face_short_range.tflite")]
+    [InlineData("vision_wasm_internal.wasm")]
+    public async Task MediaPipe_model_and_wasm_are_served(string file)
+    {
+        var c = Client();
+        Directory.CreateDirectory(Path.Combine(_webRoot, "mediapipe"));
+        File.WriteAllBytes(Path.Combine(_webRoot, "mediapipe", file), [1, 2, 3]);
+
+        var res = await c.GetAsync($"/mediapipe/{file}");
+
+        await res.ExpectAsync(HttpStatusCode.OK);
+        Assert.Equal([1, 2, 3], await res.Content.ReadAsByteArrayAsync());
+    }
+
     [Fact]
     public async Task Api_hub_and_missing_file_paths_are_never_the_app()
     {
