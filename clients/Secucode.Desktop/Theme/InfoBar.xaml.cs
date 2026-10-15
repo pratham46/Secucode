@@ -35,14 +35,14 @@ public partial class InfoBar : UserControl
         AutomationProperties.SetLiveSetting(MessageText, severity == InfoSeverity.Error ? AutomationLiveSetting.Assertive : AutomationLiveSetting.Polite);
         ActionButton.Visibility = !hasAction ? Visibility.Collapsed : Visibility.Visible;
 
+        var wasHidden = Visibility != Visibility.Visible;
+        Visibility = Visibility.Visible;
+        if (wasHidden) Transitions.PopIn(Root);
+
         // WPF doesn't raise LiveRegionChanged on text changes, so do it for screen readers.
         var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.FromElement(MessageText)
                    ?? System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(MessageText);
         peer?.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
-
-        var wasHidden = Visibility != Visibility.Visible;
-        Visibility = Visibility.Visible;
-        if (wasHidden) Transitions.PopIn(Root);
     }
 
     // Network failures offer Retry; anything else shows the server's message.
