@@ -41,8 +41,8 @@ public partial class ExamStartPage : UserControl
 
     private async void Capture_Click(object sender, RoutedEventArgs e)
     {
-        CaptureButton.IsEnabled = false;
-        BeginButton.IsEnabled = false;
+        _busy = true; // the camera is in use: freeze Begin, Capture and PIN
+        UpdateBegin();
         Info.Hide();
         try
         {
@@ -62,6 +62,7 @@ public partial class ExamStartPage : UserControl
         }
         finally
         {
+            _busy = false;
             UpdateBegin();
         }
     }
