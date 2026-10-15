@@ -35,3 +35,5 @@
   .content { padding: 16px; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
+.question-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+@media (max-width: 899px) { .question-row { grid-template-columns: 1fr; } }

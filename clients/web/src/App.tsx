@@ -2,8 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 'react-router-dom';
 import { ApiClient, ApiError } from './api/client';
-import { AuthProvider, RequireAuth } from './auth/AuthContext';
+import { AuthProvider, RequireAuth, StaffOnly } from './auth/AuthContext';
 import { ExamsHome } from './features/exams/ExamsHome';
+import { ExamEditorPage } from './features/staff/ExamEditorPage';
 import { LoginPage } from './features/login/LoginPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { AppShell } from './shell/AppShell';
@@ -16,7 +17,9 @@ export const routes: RouteObject[] = [
     children: [
       { path: '/', element: <Navigate to="/exams" replace /> },
       { path: '/exams', element: <ExamsHome /> },
-      // Staff routes (Tasks 7–8) and student routes (Task 12) go here.
+      { path: '/exams/new', element: <StaffOnly><ExamEditorPage /></StaffOnly> },
+      { path: '/exams/:id/edit', element: <StaffOnly><ExamEditorPage /></StaffOnly> },
+      // More staff routes (Task 8) and student routes (Task 12) go here.
       { path: '/settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/exams" replace /> },
     ],
