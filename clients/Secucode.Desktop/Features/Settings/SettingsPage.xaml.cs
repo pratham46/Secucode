@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Secucode.Desktop.Theme;
@@ -20,8 +21,8 @@ public partial class SettingsPage : UserControl
     {
         if (ThemeChoiceBox.SelectedItem is not ThemeChoice choice || choice == App.Settings.Theme) return;
         App.Settings.Theme = choice;
-        App.Settings.Save();
         ThemeManager.Apply(choice);
+        try { App.Settings.Save(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // ponytail: theme applies this session, just not remembered
     }
 
     private void SignOut_Click(object sender, RoutedEventArgs e) => App.SignOut(null);

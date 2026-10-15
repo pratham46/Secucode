@@ -15,7 +15,7 @@ public partial class ShellWindow : Window
         UserRoles.Text = session.RoleNames;
         Nav.ItemsSource = new[]
         {
-            new NavItem("", "Exams", () => new TextBlock { Text = "Exams", Style = (Style)FindResource("Title") }),
+            new NavItem("", "Exams", () => new TextBlock { Text = "Exams", Style = (Style)FindResource("Title") }),
             new NavItem("", "Settings", () => new SettingsPage()),
         };
         Loaded += (_, _) => Nav.SelectedIndex = 0;

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Secucode.Desktop.Api;
 using Secucode.Desktop.Theme;
@@ -32,7 +33,7 @@ public partial class LoginWindow : Window
         if (address != App.Settings.ApiBaseUrl)
         {
             App.UseServer(address);
-            App.Settings.Save();
+            try { App.Settings.Save(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // ponytail: address just isn't remembered
         }
 
         SignInButton.IsEnabled = false;

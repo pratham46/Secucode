@@ -47,7 +47,10 @@ public partial class App : Application
     // Shows the sign-in window and closes every other window.
     public static async void SignOut(string? message, bool callServer = true)
     {
-        if (callServer) await Api.LogoutAsync();
+        if (callServer)
+        {
+            try { await Api.LogoutAsync(); } catch (Exception) { } // local sign-out must always proceed
+        }
         Session = null;
         if (Current.Windows.OfType<LoginWindow>().Any()) return;
         var login = new LoginWindow(message);
