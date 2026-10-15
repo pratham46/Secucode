@@ -1,26 +1,27 @@
 # 🔐 SecuCode
 
-SecuCode is a Windows desktop app (WPF, .NET 8) for running **proctored coding exams**.
-Teachers create exams with coding questions; students take them in a locked-down full-screen window
-while their webcam, microphone and window focus are monitored.
+SecuCode runs **proctored coding exams**. An ASP.NET Core 8 API (`server/Secucode.Api`) holds exams, attempts and
+evidence; the Windows desktop app (WPF, .NET 8, `clients/Secucode.Desktop`) is its client for staff and students.
+Staff create exams with coding questions; students take them in a locked-down full-screen window while their webcam,
+microphone and window focus are monitored.
 
 ---
 
 ## 📌 Features
 
-- **Teacher dashboard**: create, edit, delete and activate/deactivate exams for a branch/class/batch; preview an exam; open the submission evidence folder.
-- **Student flow**: login → upcoming exams → PIN check → reference face capture → exam.
-- **Exam window**: one random question, a code editor, a built-in runner for **Python, JavaScript, Java and C++** (5 s run limit), and a countdown that auto-submits at zero.
+- **Staff** (faculty, HOD, super admin): list exams by date range; create and edit exams (local start/end time, duration, target department/year/batch, desktop-only or also web, ordered questions); activate/deactivate; delete exams nobody has attempted; view each exam's attempts with the student's code and proctoring events.
+- **Students**: sign in → exams open now or coming up → reference face capture + PIN → exam.
+- **Exam window**: one random question, a code editor, a runner for **Python, JavaScript, Java and C++** (runs on the API: 5 s run limit, 10 runs a minute), and a countdown kept in sync with the server that auto-submits at zero.
 - **Proctoring** (students only):
   - Face check every 3 s with OpenCV: no face, more than one face, or a face that doesn't match the reference (LBPH) is a strike, and 3 strikes in a row auto-submit.
-  - Leaving the window 3 times or minimizing it auto-submits.
+  - Leaving the window 3 times or minimizing it auto-submits (the focus check is off in Debug builds).
   - Alt+Tab, Alt/Ctrl+Esc, the Win keys and Alt+F4 are blocked, as are copy/cut/paste and drag-drop.
-  - Microphone audio is recorded in 3-minute WAV chunks, and code is auto-saved every 30 s.
-- **Submissions**: stored in the `submissions` table (one per student per exam, so no retakes). Evidence files go to disk (see below).
+  - Microphone audio in 60 s WAV chunks, webcam frames of failed checks and a final screenshot are uploaded as evidence.
+- **Offline-tolerant**: code is auto-saved every 30 s; while the connection is down, saves, evidence and the submission wait on disk and are sent in order when it returns.
 
 ## 🛠️ Tech
 
-C# / WPF (.NET 8) · MySQL 8 · Emgu CV (OpenCV) · NAudio · BCrypt.Net
+API: ASP.NET Core 8 · EF Core · MySQL 8 · SignalR · Docker (code sandbox). Desktop: C# / WPF (.NET 8) · Emgu CV (OpenCV) · NAudio.
 
 ---
 
@@ -28,11 +29,10 @@ C# / WPF (.NET 8) · MySQL 8 · Emgu CV (OpenCV) · NAudio · BCrypt.Net
 
 ### Prerequisites
 
-- Windows 10/11, [.NET 8 SDK](https://dotnet.microsoft.com/download), Visual Studio 2022 (optional)
-- MySQL 8.x running locally
-- A webcam (required to take an exam as a student). A microphone is optional; a missing one is logged.
-- Language runtimes on `PATH` for the code runner (each is optional, and a missing one shows a clear message):
-  `python`, `node`, `java` (JDK 11+), `g++` (e.g. MinGW-w64)
+- Windows 10/11 for the desktop app, [.NET 8 SDK](https://dotnet.microsoft.com/download), Visual Studio 2022 (optional)
+- For the API: MySQL 8.x on localhost (local run) or Docker Desktop (Docker Compose run)
+- Students need a webcam to take an exam. A microphone is optional; a missing one is logged.
+- For the API's local code runner (each is optional): `python`, `node`, `java` (JDK 11+), `g++` on `PATH`. The Docker run sandboxes code in containers instead.
 
 ---
 
@@ -44,6 +44,7 @@ new web app will both use. Design: `docs/superpowers/specs/2026-10-06-secucode-p
 **Run locally** (needs MySQL on localhost with root/root, and the .NET 8 SDK):
 
 ```powershell
+$env:ASPNETCORE_ENVIRONMENT="Development"; $env:ASPNETCORE_URLS="http://localhost:8080"   # dev settings, desktop app's default address
 dotnet run --project server/Secucode.Api -- seed   # creates database secucode_api + demo data, then exits
 dotnet run --project server/Secucode.Api           # API + Swagger UI at the URL it prints, /swagger
 ```
@@ -97,15 +98,14 @@ project diagrams/, project ss/
 
 ## ⚠️ Known limitations
 
-- Student code runs **unsandboxed** with the app's privileges. Isolate it before using this for high-stakes exams.
-- The face-match threshold (`FaceMatchMaxDistance` in `TestPage.xaml.cs`) needs calibrating on real webcams and lighting.
-- Evidence files (images, audio) stay on the exam PC. Only the code and the reason go to the database.
+- The API's local runner (`Runner:Mode = Local`, the default outside Docker) runs student code **unsandboxed** on the server. Use the Docker Compose run (`Runner__Mode: Docker`) for real exams.
+- The face-match threshold (`MatchMaxDistance` in `clients/Secucode.Desktop/Proctoring/FaceMonitor.cs`) needs calibrating on real webcams and lighting.
 - Ctrl+Alt+Del can't be blocked by any app. Leaving the window that way is caught by the focus check instead.
 
 ## 💡 Future improvements
 
-- Sandboxed code execution, automatic grading with test cases
-- Teacher view of submissions from the database; uploading evidence to central storage
+- Automatic grading with test cases
+- Web app for students and staff
 - User management UI
 
 ## 👨‍🏫 Author
