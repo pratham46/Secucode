@@ -4,6 +4,8 @@ import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from 
 import { ApiClient, ApiError } from './api/client';
 import { AuthProvider, RequireAuth, StaffOnly } from './auth/AuthContext';
 import { ExamsHome } from './features/exams/ExamsHome';
+import { AttemptDetailPage } from './features/staff/AttemptDetailPage';
+import { AttemptListPage } from './features/staff/AttemptListPage';
 import { ExamEditorPage } from './features/staff/ExamEditorPage';
 import { LoginPage } from './features/login/LoginPage';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -19,6 +21,8 @@ export const routes: RouteObject[] = [
       { path: '/exams', element: <ExamsHome /> },
       { path: '/exams/new', element: <StaffOnly><ExamEditorPage /></StaffOnly> },
       { path: '/exams/:id/edit', element: <StaffOnly><ExamEditorPage /></StaffOnly> },
+      { path: '/exams/:id/attempts', element: <StaffOnly><AttemptListPage /></StaffOnly> },
+      { path: '/attempts/:id', element: <StaffOnly><AttemptDetailPage /></StaffOnly> },
       // More staff routes (Task 8) and student routes (Task 12) go here.
       { path: '/settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/exams" replace /> },

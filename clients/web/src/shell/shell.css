@@ -37,3 +37,11 @@
 }
 .question-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
 @media (max-width: 899px) { .question-row { grid-template-columns: 1fr; } }
+
+.code-editor { height: 100%; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.code-box { height: 360px; }
+.question-text { white-space: pre-wrap; }
+.evidence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.evidence { margin: 0; display: grid; gap: 6px; }
+.evidence img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-sunken); }
+.evidence audio { width: 100%; }
