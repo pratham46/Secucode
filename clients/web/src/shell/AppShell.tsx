@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { PageErrorBoundary } from './PageErrorBoundary';
@@ -13,6 +13,15 @@ export function AppShell() {
   const { session } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => window.matchMedia?.('(max-width: 899px)').matches ?? false);
+  // Collapse/expand when the window crosses the 900px breakpoint; the button still works in between.
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 899px)');
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setCollapsed(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState<{ top: number; height: number } | null>(null);
 
