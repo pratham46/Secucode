@@ -24,7 +24,7 @@ export class AudioRecorder {
   }
 
   private next(): void {
-    if (this.stopped) return;
+    if (this.stopped || !this.stream.getAudioTracks().some(t => t.readyState === 'live')) return; // mic unplugged: stop quietly
     const recorder = new MediaRecorder(new MediaStream(this.stream.getAudioTracks()), { mimeType: 'audio/webm;codecs=opus' });
     const parts: Blob[] = [];
     recorder.ondataavailable = e => { if (e.data.size > 0) parts.push(e.data); };

@@ -14,8 +14,15 @@ export const hasAudio = (stream: MediaStream) => stream.getAudioTracks().length 
 
 // Camera required, microphone optional: if asking for both fails (no mic, or mic refused), try the camera alone.
 // Throws the browser's error when the camera itself can't be used.
-export async function openMedia(): Promise<MediaStream> {
-  if (current?.getVideoTracks().some(t => t.readyState === 'live')) return current;
+let opening: Promise<MediaStream> | null = null;
+
+export function openMedia(): Promise<MediaStream> {
+  if (current?.getVideoTracks().some(t => t.readyState === 'live')) return Promise.resolve(current);
+  // Overlapping calls (React StrictMode runs effects twice in dev) share one getUserMedia, so no stream is orphaned.
+  return (opening ??= open().finally(() => { opening = null; }));
+}
+
+async function open(): Promise<MediaStream> {
   closeMedia();
   const video = { width: { ideal: 640 }, height: { ideal: 480 } };
   try {

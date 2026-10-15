@@ -22,7 +22,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const stream = { getAudioTracks: () => ['mic'] } as unknown as MediaStream;
+const track = { readyState: 'live' };
+const stream = { getAudioTracks: () => [track] } as unknown as MediaStream;
+beforeEach(() => { track.readyState = 'live'; });
 
 describe('AudioRecorder', () => {
   it('delivers a self-contained WebM chunk every interval and a last one on stop', () => {
@@ -39,5 +41,16 @@ describe('AudioRecorder', () => {
     expect(FakeRecorder.made).toHaveLength(2); // nothing restarts after stop
     vi.advanceTimersByTime(120_000);
     expect(chunks).toHaveLength(2);
+  });
+
+  it('does not spin up recorders once the microphone has ended', () => {
+    const chunks: Blob[] = [];
+    new AudioRecorder(stream, b => chunks.push(b), 60_000).start();
+    track.readyState = 'ended';
+    vi.advanceTimersByTime(60_000);
+    expect(chunks).toHaveLength(1);
+    expect(FakeRecorder.made).toHaveLength(1);
+    vi.advanceTimersByTime(120_000);
+    expect(FakeRecorder.made).toHaveLength(1);
   });
 });
