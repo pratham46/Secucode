@@ -162,6 +162,18 @@ public sealed class ExamSessionTests : IAsyncLifetime
     }
 
     [Fact]
+    public void A_stale_resync_does_not_undo_a_time_extension()
+    {
+        var session = New();
+        session.OnLive(LiveMessages.DeadlineChanged, new LiveAttemptMessage(3, 1, 2, AttemptStatus.InProgress, Now.AddMinutes(45), 0, null));
+
+        session.Resync(Attempt(deadline: Now.AddMinutes(30))); // fetched before the extension landed
+
+        Assert.Equal(TimeSpan.FromMinutes(45), session.Clock.Remaining(Now));
+        Assert.False(session.Ended);
+    }
+
+    [Fact]
     public void Code_saves_are_queued_until_the_exam_ends()
     {
         var session = New();

@@ -47,6 +47,8 @@ public partial class App : Application
     // Shows the sign-in window and closes every other window except the exam, which leaves on its own without submitting.
     public static async void SignOut(string? message, bool callServer = true)
     {
+        // Stop the exam first, without submitting; it closes itself once the student has read why.
+        foreach (var exam in Current.Windows.OfType<Features.Student.ExamWindow>().ToList()) exam.SignedOut();
         if (callServer)
         {
             try { await Api.LogoutAsync(); } catch (Exception) { } // local sign-out must always proceed

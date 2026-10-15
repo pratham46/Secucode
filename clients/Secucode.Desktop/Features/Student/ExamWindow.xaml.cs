@@ -56,7 +56,11 @@ public partial class ExamWindow : Window
 
         _outbox.Evidence(EvidenceKind.ReferenceFace, referencePng, "image/png");
         _outbox.OnlineChanged += online => Dispatcher.BeginInvoke(() => ShowConnection(online));
-        _outbox.AttemptClosed += () => Dispatcher.BeginInvoke(() => _ = FinishAsync());
+        _outbox.AttemptClosed += () => Dispatcher.BeginInvoke(() =>
+        {
+            _session.Abandon("The server closed this attempt."); // keeps the reason if we already submitted
+            _ = FinishAsync();
+        });
         _session.AutoSubmitRequested += reason => Dispatcher.BeginInvoke(() => Submit(reason));
         _session.Closed += reason => Dispatcher.BeginInvoke(() => _ = FinishAsync());
         _live.Received += (method, message) => Dispatcher.BeginInvoke(() => _session.OnLive(method, message));
@@ -87,10 +91,7 @@ public partial class ExamWindow : Window
         CodeEditor.AllowDrop = false;
         StdinBox.AllowDrop = false;
         if (!DevMode) Deactivated += OnDeactivated;
-        StateChanged += (_, _) =>
-        {
-            if (WindowState == WindowState.Minimized) _session.Minimized();
-        };
+        StateChanged += OnStateChanged;
 
         _audio.ChunkReady += chunk => _outbox.Evidence(EvidenceKind.Audio, chunk, "audio/wav");
         if (!_audio.Start(out var audioError)) _session.AudioUnavailable(audioError ?? "No microphone.");
@@ -98,8 +99,10 @@ public partial class ExamWindow : Window
         _tick.Tick += (_, _) => Tick();
         _faceTimer.Tick += (_, _) =>
         {
-            var (result, jpeg) = _face.Check();
-            _session.FaceResult(result, jpeg);
+            (FaceCheck result, byte[]? jpeg) check;
+            try { check = _face.Check(); }
+            catch (Exception) { check = (FaceCheck.NoFrame, null); } // a camera fault is a dropped frame, not a strike
+            _session.FaceResult(check.result, check.jpeg);
             ShowStrikes();
         };
         _saveTimer.Tick += (_, _) => Save();
@@ -141,6 +144,11 @@ public partial class ExamWindow : Window
     {
         if (online) Banner.Hide();
         else Banner.Show(InfoSeverity.Warning, "Offline — your work is saved on this PC and will be sent when the connection returns.");
+    }
+
+    private void OnStateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Minimized) _session.Minimized();
     }
 
     private void OnDeactivated(object? sender, EventArgs e)
@@ -194,7 +202,9 @@ public partial class ExamWindow : Window
     private void Submit(string reason)
     {
         if (_session.Ended) return;
-        var face = _face.CaptureJpeg();
+        byte[]? face;
+        try { face = _face.CaptureJpeg(); }
+        catch (Exception) { face = null; } // a camera fault must never block submitting
         var screen = ScreenCapture.Jpeg();
         StopProctoring();
         _session.Submit(CodeEditor.Text, SelectedLanguage, reason, face, screen);
@@ -209,6 +219,7 @@ public partial class ExamWindow : Window
         _faceTimer.Stop();
         _saveTimer.Stop();
         Deactivated -= OnDeactivated;
+        StateChanged -= OnStateChanged;
         _audio.Stop();
         Lockdown.Disable();
     }
@@ -263,17 +274,23 @@ public partial class ExamWindow : Window
         Close();
     }
 
-    // Signed out (session revoked): leave without submitting; the attempt can be resumed after signing in again.
-    private void OnSessionExpired(object? sender, EventArgs e) => Dispatcher.BeginInvoke(() =>
+    private void OnSessionExpired(object? sender, EventArgs e) => Dispatcher.BeginInvoke(SignedOut);
+
+    // Signed out (by the student or a revoked session): leave without submitting; the attempt can be resumed after
+    // signing in again. Safe to call twice (App.SignOut and SessionExpired both lead here).
+    public void SignedOut()
     {
-        if (_finishing) return;
+        if (_finishing || _canClose) return;
         _session.Abandon("Signed out");
         StopProctoring();
         _canClose = true;
-        MessageBox.Show(this, "You were signed out. Sign in again and choose Resume to continue — your work is saved on this PC.",
-            "Signed out", MessageBoxButton.OK, MessageBoxImage.Warning);
-        Close();
-    });
+        Dispatcher.BeginInvoke(() =>
+        {
+            MessageBox.Show(this, "You were signed out. Sign in again and choose Resume to continue — your work is saved on this PC.",
+                "Signed out", MessageBoxButton.OK, MessageBoxImage.Warning);
+            Close();
+        });
+    }
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {

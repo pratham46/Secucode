@@ -92,6 +92,8 @@ public sealed class ExamSession(AttemptDto attempt, AttemptOutbox outbox, Func<D
     // After (re)connecting: pushes may have been missed, so take the server's view.
     public void Resync(AttemptDto fresh)
     {
+        // A response fetched before a live extension landed must not shorten the clock again.
+        if (fresh.Status == Attempt.Status && fresh.DeadlineAt < Clock.DeadlineUtc) return;
         Attempt = fresh;
         Clock = new ExamClock(fresh.DeadlineAt, fresh.ServerTime, utcNow());
         if (fresh.Status != AttemptStatus.InProgress) Close("This attempt is no longer in progress.");
