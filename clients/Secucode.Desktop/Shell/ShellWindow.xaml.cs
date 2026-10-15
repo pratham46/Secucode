@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Secucode.Desktop.Features.Settings;
+using Secucode.Desktop.Features.Staff;
 using Secucode.Desktop.Features.Student;
 using Secucode.Desktop.Theme;
 
@@ -18,7 +19,7 @@ public partial class ShellWindow : Window
         {
             new NavItem("", "Exams", () => session.IsStudent
                 ? new StudentExamsPage()
-                : new TextBlock { Text = "Exams", Style = (Style)FindResource("Title") }),
+                : new StaffExamsPage(session)),
             new NavItem("", "Settings", () => new SettingsPage()),
         };
         Loaded += (_, _) => Nav.SelectedIndex = 0;
