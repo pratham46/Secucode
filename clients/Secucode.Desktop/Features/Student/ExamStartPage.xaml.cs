@@ -26,8 +26,14 @@ public partial class ExamStartPage : UserControl
         UpdateBegin();
     }
 
-    private void UpdateBegin() =>
-        BeginButton.IsEnabled = _referencePng is not null && (_vm.IsResume || Pin.Password.Length > 0);
+    private bool _busy; // true while Begin_Click runs: the camera belongs to the monitor and the form is frozen
+
+    private void UpdateBegin()
+    {
+        BeginButton.IsEnabled = !_busy && _referencePng is not null && (_vm.IsResume || Pin.Password.Length > 0);
+        CaptureButton.IsEnabled = !_busy;
+        Pin.IsEnabled = !_busy;
+    }
 
     private void Pin_PasswordChanged(object sender, RoutedEventArgs e) => UpdateBegin();
 
@@ -36,6 +42,7 @@ public partial class ExamStartPage : UserControl
     private async void Capture_Click(object sender, RoutedEventArgs e)
     {
         CaptureButton.IsEnabled = false;
+        BeginButton.IsEnabled = false;
         Info.Hide();
         try
         {
@@ -49,44 +56,56 @@ public partial class ExamStartPage : UserControl
         {
             Info.Show(InfoSeverity.Error, error.Message);
         }
+        catch (Exception) // native camera/OpenCV failures
+        {
+            Info.Show(InfoSeverity.Error, "The camera couldn't be used. Close other apps that use it and try again.");
+        }
         finally
         {
-            CaptureButton.IsEnabled = true;
             UpdateBegin();
         }
     }
 
     private async void Begin_Click(object sender, RoutedEventArgs e)
     {
-        BeginButton.IsEnabled = false;
+        _busy = true;
+        UpdateBegin();
         Info.Hide();
-        // A signed-out exam window can linger (open dialog) holding the webcam and outbox; never run two at once.
-        if (Application.Current.Windows.OfType<ExamWindow>().Any())
-        {
-            Info.Show(InfoSeverity.Warning, "An exam window is still open. Close it, then try again.");
-            UpdateBegin();
-            return;
-        }
-        // Proctoring must work before the server starts the clock (spec §9). Created on the UI thread on purpose.
-        var monitor = FaceMonitor.TryStart(_referencePng);
-        if (monitor is null)
-        {
-            Info.Show(InfoSeverity.Error, "The webcam isn't available, so the exam can't start. Close other apps that use the camera and try again.");
-            UpdateBegin();
-            return;
-        }
+        FaceMonitor? monitor = null; // ours until the exam window takes it over
         try
         {
+            // A signed-out exam window can linger (open dialog) holding the webcam and outbox; never run two at once.
+            if (Application.Current.Windows.OfType<ExamWindow>().Any())
+            {
+                Info.Show(InfoSeverity.Warning, "An exam window is still open. Close it, then try again.");
+                return;
+            }
+            // Proctoring must work before the server starts the clock (spec §9). Created on the UI thread on purpose.
+            monitor = FaceMonitor.TryStart(_referencePng);
+            if (monitor is null)
+            {
+                Info.Show(InfoSeverity.Error, "The webcam isn't available, so the exam can't start. Close other apps that use the camera and try again.");
+                return;
+            }
             var attempt = await _vm.BeginAsync(Pin.Password);
             var window = new ExamWindow(App.Api, _vm.Exam.Title, attempt, monitor, _referencePng!);
+            monitor = null; // the window owns it now
             window.Closed += (_, _) => ShellWindow.Current?.Navigate(new StudentExamsPage());
             window.Show();
             ShellWindow.Current?.Navigate(new StudentExamsPage());
         }
         catch (ApiError error)
         {
-            monitor.Dispose();
             Info.ShowError(error);
+        }
+        catch (Exception error)
+        {
+            Info.Show(InfoSeverity.Error, error.Message);
+        }
+        finally
+        {
+            monitor?.Dispose();
+            _busy = false;
             UpdateBegin();
         }
     }
