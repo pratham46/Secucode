@@ -8,13 +8,15 @@ import { AttemptDetailPage } from './features/staff/AttemptDetailPage';
 import { AttemptListPage } from './features/staff/AttemptListPage';
 import { ExamEditorPage } from './features/staff/ExamEditorPage';
 import { LoginPage } from './features/login/LoginPage';
+import { ExamPage } from './features/student/ExamPage';
 import { ExamStartPage } from './features/student/ExamStartPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { AppShell } from './shell/AppShell';
 
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
-  // Full-screen routes without the shell (the student exam page, Task 13) go here.
+  // Full-screen routes without the shell.
+  { path: '/attempt/:id', element: <RequireAuth keepOnExpiry><StudentOnly><ExamPage /></StudentOnly></RequireAuth> },
   {
     element: <RequireAuth><AppShell /></RequireAuth>,
     children: [
