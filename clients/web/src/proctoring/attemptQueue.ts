@@ -28,10 +28,13 @@ export class AttemptQueue {
   private closed = false;
   private offline = false;
   private wake: (() => void) | null = null;
+  private backoff = 1000;
 
   onOfflineChange: (offline: boolean) => void = () => {};
   onClosed: () => void = () => {};
   onSubmitted: (attempt: AttemptDto) => void = () => {};
+  // The server refused the submit for good (e.g. code too large): the page must tell the student.
+  onSubmitRejected: (error: ApiError) => void = () => {};
 
   constructor(private readonly sender: AttemptSender, private readonly maxBackoffMs = 30_000) {}
 
@@ -47,7 +50,10 @@ export class AttemptQueue {
     if (this.closed) return;
     if (item.kind === 'code') this.items = this.items.filter(i => i === this.sending || i.kind !== 'code');
     this.items.push(item);
-    if (item.kind === 'submit') this.retryNow();
+    if (item.kind === 'submit') {
+      this.backoff = 1000; // a submit must not wait out a long backoff
+      this.retryNow();
+    }
     void this.run();
   }
 
@@ -65,15 +71,15 @@ export class AttemptQueue {
   private async run(): Promise<void> {
     if (this.running) return;
     this.running = true;
-    let backoff = 1000;
     try {
       while (!this.closed && this.items.length > 0) {
         const item = this.items[0];
         this.sending = item;
+        let done: AttemptDto | null = null;
         try {
-          await this.send(item);
+          done = await this.send(item);
           this.remove(item);
-          backoff = 1000;
+          this.backoff = 1000;
           this.setOffline(false);
         } catch (e) {
           if (this.closed) return;
@@ -83,14 +89,25 @@ export class AttemptQueue {
             this.onClosed();
             return;
           }
+          if (REJECTED.has(status) && item.kind === 'submit') {
+            this.close();
+            this.onSubmitRejected(e as ApiError);
+            return;
+          }
           if (REJECTED.has(status)) {
             console.warn('SecuCode: the server rejected an exam item, so it was dropped.', item.kind, e);
             this.remove(item);
             continue;
           }
           this.setOffline(status === 0 || status >= 500);
-          await this.sleep(backoff);
-          backoff = Math.min(backoff * 2, this.maxBackoffMs);
+          const wait = this.backoff;
+          this.backoff = Math.min(wait * 2, this.maxBackoffMs); // before sleeping: a submit may reset it mid-wait
+          await this.sleep(wait);
+          continue;
+        }
+        if (done) {
+          this.onSubmitted(done);
+          return;
         }
       }
     } finally {
@@ -99,13 +116,14 @@ export class AttemptQueue {
     }
   }
 
-  private async send(item: QueueItem): Promise<void> {
+  private async send(item: QueueItem): Promise<AttemptDto | null> {
     switch (item.kind) {
       case 'code':
-        return this.sender.saveCode(item.code, item.language);
+        await this.sender.saveCode(item.code, item.language);
+        return null;
       case 'evidence':
         await this.sender.uploadEvidence(item.evidenceKind, item.blob);
-        return;
+        return null;
       case 'event':
         if (item.evidence && item.evidenceId === undefined) {
           try {
@@ -115,13 +133,13 @@ export class AttemptQueue {
             item.evidenceId = null; // the frame was refused; the event still matters
           }
         }
-        return this.sender.postEvent(item.type, item.detail, item.evidenceId ?? undefined);
+        await this.sender.postEvent(item.type, item.detail, item.evidenceId ?? undefined);
+        return null;
       case 'submit': {
         const attempt = await this.sender.submit(item.code, item.language, item.reason);
         this.closed = true; // nothing may follow a submit
         this.items = [];
-        this.onSubmitted(attempt);
-        return;
+        return attempt;
       }
     }
   }

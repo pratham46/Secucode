@@ -149,4 +149,41 @@ describe('AttemptQueue', () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(log).toEqual([]);
   });
+
+  it('a submit resets a grown backoff, so its own retries start at 1 s', async () => {
+    const { sender, log, fail } = fakeSender();
+    fail('code', ...Array.from({ length: 7 }, offline)); // waits 1,2,4,8,16 s, then 30 s
+    const q = new AttemptQueue(sender);
+    q.enqueue(code('x'));
+    await flush();
+    await vi.advanceTimersByTimeAsync(31_000); // 6 failures so far, now waiting 30 s
+    fail('submit', offline(), offline());
+    q.enqueue(submit('x'));
+    await flush(); // woken: the 7th failure; the wait is 1 s, not 30 s
+    expect(log).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1000); // code saved, submit fails once
+    expect(log).toEqual(['code:x']);
+    await vi.advanceTimersByTimeAsync(1000); // second submit failure, next wait 2 s
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(log).toEqual(['code:x']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(log).toEqual(['code:x', 'submit:x:Done.']);
+  });
+
+  it('a rejected submit closes the queue and is reported', async () => {
+    const { sender, log, fail } = fakeSender();
+    const err = new ApiError(400, 'Too large');
+    fail('submit', err);
+    const q = new AttemptQueue(sender);
+    const rejected = vi.fn();
+    q.onSubmitRejected = rejected;
+    q.enqueue(submit());
+    await flush();
+    q.enqueue(code('late'));
+    await flush();
+    expect(rejected).toHaveBeenCalledOnce();
+    expect(rejected).toHaveBeenCalledWith(err);
+    expect(q.isClosed).toBe(true);
+    expect(log).toEqual([]);
+  });
 });
