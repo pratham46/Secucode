@@ -1,0 +1,106 @@
+<Window x:Class="Secucode.Desktop.Features.Student.ExamWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:theme="clr-namespace:Secucode.Desktop.Theme"
+        Style="{StaticResource AppWindow}" Title="SecuCode exam"
+        WindowStyle="None" ResizeMode="NoResize" WindowState="Maximized" Topmost="True">
+    <Grid>
+        <DockPanel Margin="20">
+            <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock x:Name="ExamTitle" Style="{StaticResource Subtitle}"/>
+                    <TextBlock Style="{StaticResource Caption}" Margin="0,2,0,0"
+                               Text="Proctoring is on: your webcam, microphone and window focus are monitored."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,24,0" ToolTip="Face check strikes">
+                    <TextBlock Text="&#xE722;" Style="{StaticResource Icon}" Foreground="{DynamicResource TextSecondary}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <Ellipse x:Name="Strike1" Width="10" Height="10" Margin="2" Fill="{DynamicResource BorderStrong}"/>
+                    <Ellipse x:Name="Strike2" Width="10" Height="10" Margin="2" Fill="{DynamicResource BorderStrong}"/>
+                    <Ellipse x:Name="Strike3" Width="10" Height="10" Margin="2" Fill="{DynamicResource BorderStrong}"/>
+                </StackPanel>
+                <Border Grid.Column="2" CornerRadius="8" Padding="14,6" Background="{DynamicResource SurfaceRaised}"
+                        BorderBrush="{DynamicResource Border}" BorderThickness="1">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE916;" Style="{StaticResource Icon}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="TimerText" FontFamily="{StaticResource CodeFont}" FontSize="20" FontWeight="SemiBold"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+            <theme:InfoBar x:Name="Banner" DockPanel.Dock="Top" Margin="0,0,0,12"/>
+            <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                <Button x:Name="SubmitButton" DockPanel.Dock="Right" Content="Submit exam" Style="{StaticResource PrimaryButton}" Click="Submit_Click"/>
+                <TextBlock x:Name="SavedText" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+            </DockPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="3*"/>
+                </Grid.ColumnDefinitions>
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="Question" Style="{StaticResource Caption}" Margin="0,0,0,8"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <TextBlock x:Name="QuestionText" Style="{StaticResource Body}" FontSize="15"/>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+                <Grid Grid.Column="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="3*"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="2*"/>
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,8">
+                        <Button x:Name="RunButton" DockPanel.Dock="Right" Click="Run_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE768;" Style="{StaticResource Icon}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Text="Run"/>
+                            </StackPanel>
+                        </Button>
+                        <ComboBox x:Name="LanguageBox" Width="160" HorizontalAlignment="Left"/>
+                    </DockPanel>
+                    <TextBox x:Name="CodeEditor" Grid.Row="1" Style="{StaticResource CodeEditor}"/>
+                    <Grid Grid.Row="2" Margin="0,12,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="2*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Input" Style="{StaticResource Caption}"/>
+                        <TextBlock Grid.Column="2" Text="Output" Style="{StaticResource Caption}"/>
+                    </Grid>
+                    <Grid Grid.Row="3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="2*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="StdinBox" Style="{StaticResource CodeEditor}"/>
+                        <TextBox x:Name="OutputBox" Grid.Column="2" Style="{StaticResource CodeEditor}" IsReadOnly="True"
+                                 Background="{DynamicResource SurfaceSunken}"/>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </DockPanel>
+
+        <!-- Shown while finishing: submitting, waiting offline, and the final outcome. -->
+        <Grid x:Name="Overlay" Visibility="Collapsed" Background="{DynamicResource Surface}">
+            <Border x:Name="OverlayCard" Style="{StaticResource Card}" Width="480" Padding="32"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel>
+                    <TextBlock x:Name="OverlayTitle" Style="{StaticResource Subtitle}"/>
+                    <TextBlock x:Name="OverlayText" Style="{StaticResource Body}" Margin="0,8,0,0" Foreground="{DynamicResource TextSecondary}"/>
+                    <Button x:Name="OverlayButton" Content="Back to exams" Style="{StaticResource PrimaryButton}"
+                            HorizontalAlignment="Right" Margin="0,24,0,0" Visibility="Collapsed" Click="OverlayButton_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

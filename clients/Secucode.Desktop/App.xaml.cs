@@ -44,7 +44,7 @@ public partial class App : Application
         new ShellWindow(Session).Show();
     }
 
-    // Shows the sign-in window and closes every other window.
+    // Shows the sign-in window and closes every other window except the exam, which leaves on its own without submitting.
     public static async void SignOut(string? message, bool callServer = true)
     {
         if (callServer)
@@ -55,7 +55,7 @@ public partial class App : Application
         if (Current.Windows.OfType<LoginWindow>().Any()) return;
         var login = new LoginWindow(message);
         login.Show();
-        foreach (var window in Current.Windows.OfType<Window>().Where(w => w != login).ToList())
+        foreach (var window in Current.Windows.OfType<Window>().Where(w => w != login && w is not Features.Student.ExamWindow).ToList())
             window.Close();
     }
 }
