@@ -373,7 +373,7 @@
                             <MultiDataTrigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetName="KnobMove" Storyboard.TargetProperty="X" To="20"
+                                        <DoubleAnimation Storyboard.TargetName="KnobMove" Storyboard.TargetProperty="X" To="18"
                                                          Duration="{StaticResource Motion.Pop}" EasingFunction="{StaticResource Motion.EaseOut}"/>
                                     </Storyboard>
                                 </BeginStoryboard>
