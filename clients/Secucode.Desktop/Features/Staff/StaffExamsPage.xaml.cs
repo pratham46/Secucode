@@ -89,6 +89,13 @@ public partial class StaffExamsPage : UserControl
             _ = RunAsync(() => _vm.DeleteAsync(row));
     }
 
-    private void New_Click(object sender, RoutedEventArgs e) { } // wired to ExamEditorPage in Task 13
-    private void Edit_Click(object sender, RoutedEventArgs e) { } // wired to ExamEditorPage in Task 13
+    private void New_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_busy) ShellWindow.Current?.Navigate(new ExamEditorPage(null));
+    }
+
+    private void Edit_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_busy && Selected is { CanManage: true } row) ShellWindow.Current?.Navigate(new ExamEditorPage(row.Exam.Id));
+    }
 }
