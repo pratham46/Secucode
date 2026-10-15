@@ -19,7 +19,10 @@ export function StaffExamList() {
   const [actionError, setActionError] = useState<unknown>(null);
 
   const exams = useQuery({ queryKey: ['exams', range], queryFn: () => api.get<ExamDto[]>(`/api/exams?${rangeQuery(range)}`) });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['exams'] });
+  const refresh = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['exams'] }),
+    queryClient.invalidateQueries({ queryKey: ['exam'] }),
+  ]);
 
   const setActive = useMutation({
     mutationFn: (e: ExamDto) => api.patch(`/api/exams/${e.id}/active`, { isActive: !e.isActive }),
@@ -61,7 +64,7 @@ export function StaffExamList() {
     },
   ];
 
-  const shownError = actionError instanceof ApiError && actionError.status === 409
+  const shownError = actionError instanceof ApiError && actionError.status === 409 && !/deactivat/i.test(actionError.detail ?? '')
     ? new ApiError(409, actionError.title, `${actionError.detail ?? ''} Deactivate the exam instead to hide it from students.`.trim())
     : actionError;
 

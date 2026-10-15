@@ -18,7 +18,7 @@ export function ExamEditorPage() {
   const branches = useQuery(masters('branches'));
   const classes = useQuery(masters('classes'));
   const batches = useQuery(masters('batches'));
-  const exam = useQuery({ queryKey: ['exam', id], queryFn: () => api.get<ExamDto>(`/api/exams/${id}`), enabled: editing });
+  const exam = useQuery({ queryKey: ['exam', id], queryFn: () => api.get<ExamDto>(`/api/exams/${id}`), enabled: editing, refetchOnMount: 'always' });
 
   const [form, setForm] = useState<ExamForm | null>(() => (editing ? null : emptyForm()));
   const [errors, setErrors] = useState<FormErrors>({});
@@ -27,8 +27,8 @@ export function ExamEditorPage() {
   const dirty = useRef(false);
 
   useEffect(() => {
-    if (exam.data && form === null) setForm(formFromExam(exam.data));
-  }, [exam.data, form]);
+    if (exam.data && !exam.isFetching && form === null) setForm(formFromExam(exam.data));
+  }, [exam.data, exam.isFetching, form]);
 
   // Leaving with unsaved changes: in-app navigation asks; closing the tab gets the browser's own prompt.
   const blocker = useBlocker(({ currentLocation, nextLocation }) => dirty.current && currentLocation.pathname !== nextLocation.pathname);
