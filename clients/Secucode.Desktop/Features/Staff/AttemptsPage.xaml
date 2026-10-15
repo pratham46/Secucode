@@ -16,21 +16,21 @@
         <theme:InfoBar x:Name="Info" DockPanel.Dock="Top" Margin="0,0,0,12"/>
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*"/>
-                <ColumnDefinition Width="16"/>
                 <ColumnDefinition Width="2*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Border Style="{StaticResource Card}" Padding="8">
                 <Grid>
                     <TextBlock x:Name="Empty" Text="No attempts yet." Margin="12" Visibility="Collapsed" Foreground="{DynamicResource TextSecondary}"/>
                     <DataGrid x:Name="Grid" SelectionChanged="Grid_SelectionChanged">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Student" Binding="{Binding Student}" Width="2*"/>
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="*"/>
-                            <DataGridTextColumn Header="App" Binding="{Binding Client}" Width="Auto"/>
-                            <DataGridTextColumn Header="Started" Binding="{Binding Started}" Width="Auto"/>
-                            <DataGridTextColumn Header="Submitted" Binding="{Binding Submitted}" Width="Auto"/>
-                            <DataGridTextColumn Header="Strikes" Binding="{Binding Strikes}" Width="Auto"/>
+                            <DataGridTextColumn Header="Student" Binding="{Binding Student}" Width="*" MinWidth="110"/>
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="115"/>
+                            <DataGridTextColumn Header="App" Binding="{Binding Client}" Width="80"/>
+                            <DataGridTextColumn Header="Started" Binding="{Binding Started}" Width="100"/>
+                            <DataGridTextColumn Header="Submitted" Binding="{Binding Submitted}" Width="100"/>
+                            <DataGridTextColumn Header="Strikes" Binding="{Binding Strikes}" Width="65"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </Grid>

@@ -518,6 +518,8 @@
     </Style>
     <Style TargetType="DataGridCell">
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <!-- beats the system theme's selected+focused trigger (HighlightText: white on our soft accent) -->
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="DataGridCell">

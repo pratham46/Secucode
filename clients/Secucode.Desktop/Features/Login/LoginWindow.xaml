@@ -11,6 +11,7 @@
     <DockPanel>
         <shell:TitleBar DockPanel.Dock="Top"/>
         <Border x:Name="Card" Style="{StaticResource Card}" Margin="32,8,32,32" Padding="32">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Focusable="False"><!-- an error plus the server panel outgrow the fixed-height card -->
             <StackPanel VerticalAlignment="Center">
                 <TextBlock Text="SecuCode" Style="{StaticResource Title}"/>
                 <TextBlock Text="Sign in to continue" Style="{StaticResource Caption}" FontSize="14" Margin="0,4,0,24"/>
@@ -25,9 +26,10 @@
                         Margin="-8,16,0,0" Foreground="{DynamicResource TextSecondary}" Click="ToggleServer_Click"/>
                 <StackPanel x:Name="ServerPanel" Visibility="Collapsed" Margin="0,6,0,0">
                     <TextBox x:Name="ServerAddress"/>
-                    <TextBlock Text="The SecuCode server address, for example http://localhost:8080" Style="{StaticResource Caption}" Margin="0,6,0,0"/>
+                    <TextBlock Text="The SecuCode server address, for example http://localhost:8080" Style="{StaticResource Caption}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                 </StackPanel>
             </StackPanel>
+            </ScrollViewer>
         </Border>
     </DockPanel>
 </Window>

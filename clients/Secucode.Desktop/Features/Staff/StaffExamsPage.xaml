@@ -29,12 +29,12 @@
         <Border Style="{StaticResource Card}" Padding="8">
             <DataGrid x:Name="Grid" SelectionChanged="Grid_SelectionChanged" MouseDoubleClick="Grid_MouseDoubleClick">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="2*"/>
-                    <DataGridTextColumn Header="When" Binding="{Binding Window}" Width="2*"/>
-                    <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="Auto"/>
-                    <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="Auto"/>
-                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="Auto"/>
-                    <DataGridTextColumn Header="Created by" Binding="{Binding CreatedBy}" Width="*"/>
+                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="3*"/>
+                    <DataGridTextColumn Header="When" Binding="{Binding Window}" Width="3*"/>
+                    <DataGridTextColumn Header="Duration" Binding="{Binding Duration}" Width="90"/>
+                    <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="140"/>
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="90"/>
+                    <DataGridTextColumn Header="Created by" Binding="{Binding CreatedBy}" Width="2*"/>
                 </DataGrid.Columns>
             </DataGrid>
         </Border>

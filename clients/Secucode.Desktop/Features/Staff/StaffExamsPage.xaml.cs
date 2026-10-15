@@ -26,7 +26,6 @@ public partial class StaffExamsPage : UserControl
 
     private async Task LoadAsync()
     {
-        Info.Hide();
         _vm.From = FromDate.SelectedDate ?? _vm.From;
         _vm.To = ToDate.SelectedDate ?? _vm.To;
         await RunAsync(_vm.LoadAsync);
@@ -38,6 +37,7 @@ public partial class StaffExamsPage : UserControl
         if (_busy) return;
         _busy = true;
         UpdateActions();
+        Info.Hide(); // a new action's outcome replaces the last one's error
         try
         {
             await action();
