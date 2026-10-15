@@ -53,7 +53,7 @@ public sealed class AudioRecorder : IDisposable
             _stopped = true;
             last = FinishChunkLocked();
         }
-        if (last is not null) ChunkReady?.Invoke(last);
+        if (last is not null) Raise(last);
     }
 
     private void Rotate()
@@ -65,7 +65,14 @@ public sealed class AudioRecorder : IDisposable
             done = FinishChunkLocked();
             NewChunkLocked();
         }
-        if (done is not null) ChunkReady?.Invoke(done);
+        if (done is not null) Raise(done);
+    }
+
+    // A throwing handler must not crash the timer thread.
+    private void Raise(byte[] chunk)
+    {
+        try { ChunkReady?.Invoke(chunk); }
+        catch (Exception) { }
     }
 
     private void NewChunkLocked()

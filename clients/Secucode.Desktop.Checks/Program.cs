@@ -73,9 +73,10 @@ using (var audio = new AudioRecorder())
 Check("screenshot is a JPEG", ScreenCapture.Jpeg() is { Length: > 2 } s && s[0] == 0xFF && s[1] == 0xD8);
 
 // --- Keyboard hook (installed then removed at once; never left on) ---
-try { Lockdown.Enable(); Check("lockdown hook installs", true); }
+try { Lockdown.Enable(); Check("lockdown hook installs", Lockdown.IsEnabled); }
 catch (Exception ex) { Check("lockdown hook installs", false, ex.Message); }
 finally { Lockdown.Disable(); }
+Check("lockdown hook removed", !Lockdown.IsEnabled);
 
 Console.WriteLine(failures == 0 ? "\nAll checks passed." : $"\n{failures} check(s) failed.");
 return failures == 0 ? 0 : 1;

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
@@ -11,12 +12,15 @@ public static class Lockdown
     private static readonly LowLevelKeyboardProc HookProc = HookCallback;
     private static IntPtr _hookId = IntPtr.Zero;
 
+    public static bool IsEnabled => _hookId != IntPtr.Zero;
+
     public static void Enable()
     {
         if (_hookId != IntPtr.Zero) return;
         using var process = Process.GetCurrentProcess();
         using var module = process.MainModule!;
         _hookId = SetWindowsHookEx(WH_KEYBOARD_LL, HookProc, GetModuleHandle(module.ModuleName), 0);
+        if (_hookId == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error()); // lockdown must not silently be off
     }
 
     public static void Disable()

@@ -49,7 +49,16 @@ public sealed class FaceMonitor : IDisposable
         }
         capture.Set(CapProp.FrameWidth, 320);
         capture.Set(CapProp.FrameHeight, 240);
-        return new FaceMonitor(capture, detector, referencePng is null ? null : Train(referencePng));
+        try
+        {
+            return new FaceMonitor(capture, detector, referencePng is null ? null : Train(referencePng));
+        }
+        catch (Exception)
+        {
+            capture.Dispose(); // corrupt reference: release the webcam
+            detector.Dispose();
+            return null;
+        }
     }
 
     private static LBPHFaceRecognizer Train(byte[] referencePng)

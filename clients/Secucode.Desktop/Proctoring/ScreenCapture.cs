@@ -1,21 +1,22 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Windows;
+using System.Runtime.InteropServices;
 
 namespace Secucode.Desktop.Proctoring;
 
 public static class ScreenCapture
 {
-    // ponytail: SystemParameters are in DIPs, so on a scaled display this captures the top-left part of the desktop
-    // (same as the old app). Switch to per-monitor pixel bounds if staff need the full screen.
+    // Pixel bounds of the whole virtual desktop. The app manifest is system-DPI-aware, so these are real pixels.
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+
     public static byte[]? Jpeg()
     {
         try
         {
-            var left = (int)SystemParameters.VirtualScreenLeft;
-            var top = (int)SystemParameters.VirtualScreenTop;
-            using var bitmap = new Bitmap((int)SystemParameters.VirtualScreenWidth, (int)SystemParameters.VirtualScreenHeight);
+            var left = GetSystemMetrics(76);
+            var top = GetSystemMetrics(77);
+            using var bitmap = new Bitmap(GetSystemMetrics(78), GetSystemMetrics(79));
             using (var g = Graphics.FromImage(bitmap))
                 g.CopyFromScreen(left, top, 0, 0, bitmap.Size);
             using var stream = new MemoryStream();
