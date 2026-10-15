@@ -36,10 +36,13 @@ public partial class AttemptsPage : UserControl
 
     private async void Grid_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        DetailCard.Visibility = Visibility.Hidden;
+        Info.Hide();
         if (Grid.SelectedItem is not AttemptRow row) return;
         try
         {
             var detail = await _vm.DetailAsync(row.Attempt.Id);
+            if (Grid.SelectedItem != row) return;
             DetailStudent.Text = detail.StudentName;
             DetailReason.Text = $"{row.Status} · attempt {detail.Attempt.AttemptNumber}" +
                                 (detail.Attempt.SubmitReason is { } reason ? $" · {reason}" : "");
@@ -51,7 +54,7 @@ public partial class AttemptsPage : UserControl
             DetailCode.Text = detail.Attempt.Code;
             DetailCard.Visibility = Visibility.Visible;
         }
-        catch (ApiError error)
+        catch (ApiError error) when (Grid.SelectedItem == row)
         {
             Info.ShowError(error);
         }

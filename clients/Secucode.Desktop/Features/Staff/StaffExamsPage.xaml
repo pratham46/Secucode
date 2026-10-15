@@ -17,7 +17,7 @@
             <DatePicker x:Name="FromDate" Width="140"/>
             <TextBlock Text="to" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="12,0,8,0"/>
             <DatePicker x:Name="ToDate" Width="140"/>
-            <Button Style="{StaticResource IconButton}" Content="&#xE72C;" ToolTip="Refresh" Margin="8,0,0,0" Click="Refresh_Click"/>
+            <Button x:Name="RefreshButton" Style="{StaticResource IconButton}" Content="&#xE72C;" ToolTip="Refresh" Margin="8,0,0,0" Click="Refresh_Click"/>
         </StackPanel>
         <theme:InfoBar x:Name="Info" DockPanel.Dock="Top" Margin="0,0,0,12"/>
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">

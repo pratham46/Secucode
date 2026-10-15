@@ -9,6 +9,7 @@ namespace Secucode.Desktop.Features.Staff;
 public partial class StaffExamsPage : UserControl
 {
     private readonly StaffExamsViewModel _vm;
+    private bool _busy;
 
     public StaffExamsPage(Session session)
     {
@@ -34,6 +35,9 @@ public partial class StaffExamsPage : UserControl
     // Runs an action, then refreshes the grid; errors go to the InfoBar.
     private async Task RunAsync(Func<Task> action)
     {
+        if (_busy) return;
+        _busy = true;
+        UpdateActions();
         try
         {
             await action();
@@ -43,14 +47,19 @@ public partial class StaffExamsPage : UserControl
         {
             Info.ShowError(error, () => _ = LoadAsync());
         }
-        UpdateActions();
+        finally
+        {
+            _busy = false;
+            UpdateActions();
+        }
     }
 
     private void UpdateActions()
     {
         var row = Selected;
-        AttemptsButton.IsEnabled = row?.CanViewResults == true;
-        EditButton.IsEnabled = ToggleButton.IsEnabled = DeleteButton.IsEnabled = row?.CanManage == true;
+        RefreshButton.IsEnabled = !_busy;
+        AttemptsButton.IsEnabled = !_busy && row?.CanViewResults == true;
+        EditButton.IsEnabled = ToggleButton.IsEnabled = DeleteButton.IsEnabled = !_busy && row?.CanManage == true;
         ToggleButton.Content = row?.Exam.IsActive == false ? "Activate" : "Deactivate";
     }
 
