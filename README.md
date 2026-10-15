@@ -2,6 +2,7 @@
 
 SecuCode runs **proctored coding exams**. An ASP.NET Core 8 API (`server/Secucode.Api`) holds exams, attempts and
 evidence; the Windows desktop app (WPF, .NET 8, `clients/Secucode.Desktop`) is its client for staff and students.
+The web app (React, `clients/web`) gives staff the same exam pages in a browser and lets students take exams marked *Web allowed*.
 Staff create exams with coding questions; students take them in a locked-down full-screen window while their webcam,
 microphone and window focus are monitored.
 
@@ -17,6 +18,7 @@ microphone and window focus are monitored.
   - Leaving the window 3 times or minimizing it auto-submits (the focus check is off in Debug builds).
   - Alt+Tab, Alt/Ctrl+Esc, the Win keys and Alt+F4 are blocked, as are copy/cut/paste and drag-drop.
   - Microphone audio in 60 s WAV chunks, webcam frames of failed checks and a final screenshot are uploaded as evidence.
+- **Web exams** (exams marked *Web allowed*): fullscreen required; leaving fullscreen or switching tab/window 3 times auto-submits; in-browser face detection (no face / more than one face, 3 in a row auto-submits — no face matching); webcam frames and 60 s microphone chunks uploaded as evidence; copy/paste blocked. Strict exams stay *Desktop only*.
 - **Offline-tolerant**: code is auto-saved every 30 s; while the connection is down, saves, evidence and the submission wait on disk and are sent in order when it returns.
 
 ## 🛠️ Tech
@@ -36,10 +38,9 @@ API: ASP.NET Core 8 · EF Core · MySQL 8 · SignalR · Docker (code sandbox). D
 
 ---
 
-## 🌐 Platform API (in progress)
+## 🌐 Platform API
 
-SecuCode is becoming a client-server platform: an ASP.NET Core 8 API (`server/Secucode.Api`) that the Windows app and a
-new web app will both use. Design: `docs/superpowers/specs/2026-10-06-secucode-platform-backend-design.md`.
+An ASP.NET Core 8 API (`server/Secucode.Api`) that the Windows app and the web app both use. It also serves the built web app at `/`. Designs: `docs/superpowers/specs/`.
 
 **Run locally** (needs MySQL on localhost with root/root, and the .NET 8 SDK):
 
@@ -76,6 +77,19 @@ Sign in with a demo account. The server address (default `http://localhost:8080`
 
 **Desktop tests** (Docker Desktop running; `python` on PATH): `dotnet test clients/Secucode.Desktop.Tests`. Hardware checks (webcam, microphone, screenshot): `dotnet run --project clients/Secucode.Desktop.Checks`.
 
+**Run the web app** (Node 22+; start the API first, above):
+
+```powershell
+cd clients/web
+npm install                 # also copies MediaPipe's WASM into public/
+npm run dev                 # http://localhost:5173, proxies /api and /hubs to http://localhost:8080
+npm run build               # builds into server/Secucode.Api/wwwroot; the API then serves it at /
+```
+
+Students need Chrome or Edge on a computer with a webcam. Browsers only allow the webcam on `https://` or `localhost`, so a college server needs HTTPS in front of the API.
+
+**Web tests:** `npm test` (unit). `npx playwright install chromium` once, then `npm run e2e` (Docker Desktop running): starts a throwaway MySQL on port 3317, the API on 8090 and the app on 5174, and runs Chromium with a fake camera and microphone. Screenshots go to `clients/web/test-results/screens/`.
+
 ---
 
 ## 🗂️ Project layout
@@ -91,6 +105,11 @@ clients/Secucode.Desktop/        WPF app, a client of the API
 clients/Secucode.Desktop.Tests/  client tests against the real API
 clients/Secucode.Desktop.Checks/ hardware smoke checks
 clients/Secucode_installer/      Visual Studio Installer project (.vdproj)
+clients/web/                     React + TypeScript web app (Vite)
+  src/api, auth, ui, theme       API client, session rules, hand-built UI kit and theme tokens
+  src/features/                  login, settings, staff (exams, editor, attempts), student (dashboard, start, exam)
+  src/proctoring/                strikes, attempt queue, timer, face detection, audio, focus guard
+  e2e/                           Playwright tests
 project diagrams/, project ss/
 ```
 
@@ -105,7 +124,6 @@ project diagrams/, project ss/
 ## 💡 Future improvements
 
 - Automatic grading with test cases
-- Web app for students and staff
 - User management UI
 
 ## 👨‍🏫 Author
