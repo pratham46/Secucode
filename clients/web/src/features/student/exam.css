@@ -6,14 +6,14 @@
 .rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 @media (max-width: 899px) { .start-grid { grid-template-columns: 1fr; } }
 
-.exam { display: grid; grid-template-rows: auto auto 1fr; height: 100vh; background: var(--surface); }
+.exam { display: flex; flex-direction: column; height: 100vh; background: var(--surface); }
 .exam-bar { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--surface-raised); border-bottom: 1px solid var(--border); }
 .exam-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strikes { color: var(--text-secondary); font-size: var(--fs-caption); }
 .timer { font: 600 var(--fs-subtitle) / 1 var(--font-code); font-variant-numeric: tabular-nums; }
 .timer.low { color: var(--danger); }
 .exam > .infobar { margin: 8px 16px 0; }
-.exam-body { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 16px; padding: 16px; min-height: 0; }
+.exam-body { display: grid; grid-template-columns: minmax(260px, 1fr) 2fr; gap: 16px; padding: 16px; flex: 1; min-height: 0; }
 .exam-question {
   display: flex; flex-direction: column; gap: 12px; overflow: auto; padding: 16px; user-select: none;
   background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-card);

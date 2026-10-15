@@ -40,6 +40,10 @@
 
 .code-editor { height: 100%; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .code-box { height: 360px; }
+/* ponytail: basicSetup's highlight colours are for light backgrounds, and a dark HighlightStyle needs
+   @codemirror/language, which is not on the package list; invert + hue-rotate keeps each hue but lightens it. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cm-line > span { filter: invert(1) hue-rotate(180deg); } }
+:root[data-theme="dark"] .cm-line > span { filter: invert(1) hue-rotate(180deg); }
 .question-text { white-space: pre-wrap; }
 .evidence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 .evidence { margin: 0; display: grid; gap: 6px; }

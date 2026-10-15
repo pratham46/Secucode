@@ -34,7 +34,7 @@ a { color: var(--accent); }
 .btn-danger:hover:not(:disabled) { background: var(--danger); filter: brightness(1.08); }
 .btn.icon { width: 32px; padding: 0; }
 
-.field { display: grid; gap: 4px; }
+.field { display: grid; gap: 4px; align-content: start; }
 .field > label { color: var(--text-secondary); }
 .input {
   min-height: 32px; padding: 5px 10px; width: 100%;
@@ -70,7 +70,7 @@ textarea.input { min-height: 72px; resize: vertical; }
 
 .card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 20px; }
 
-.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--fs-caption); background: var(--surface-sunken); color: var(--text-secondary); }
+.badge { display: inline-block; white-space: nowrap; padding: 2px 8px; border-radius: 999px; font-size: var(--fs-caption); background: var(--surface-sunken); color: var(--text-secondary); }
 .badge-accent { background: var(--accent-soft); color: var(--accent); }
 .badge-success { background: var(--success-soft); color: var(--success); }
 .badge-warning { background: var(--warning-soft); color: var(--warning); }
@@ -107,6 +107,7 @@ textarea.input { min-height: 72px; resize: vertical; }
   background: var(--surface-sunken); padding: 8px 12px; border-bottom: 1px solid var(--border);
 }
 .table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.table td .row { flex-wrap: nowrap; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover { background: var(--subtle-hover); }
 .empty { color: var(--text-secondary); padding: 24px; text-align: center; }
