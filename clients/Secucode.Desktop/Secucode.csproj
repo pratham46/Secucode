@@ -11,17 +11,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="secucode.ico" />
+    <Resource Include="secucode.ico" />
     <None Update="haarcascade_frontalface_default.xml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Emgu.CV" Version="4.10.0.5680" />
     <PackageReference Include="Emgu.CV.Bitmap" Version="4.10.0.5680" />
     <PackageReference Include="Emgu.CV.runtime.windows" Version="4.10.0.5680" />
-    <PackageReference Include="MySql.Data" Version="9.0.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\server\Secucode.Contracts\Secucode.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

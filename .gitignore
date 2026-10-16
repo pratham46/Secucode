@@ -21,3 +21,12 @@ Database/*backup*.sql
 .env
 # Evidence written by a locally running API
 server/Secucode.Api/evidence/
+
+clients/Secucode_installer/Debug/
+
+# Web app build output (served by the API) and web tooling
+server/Secucode.Api/wwwroot/
+clients/web/node_modules/
+clients/web/public/mediapipe/wasm/
+clients/web/test-results/
+clients/web/playwright-report/

@@ -24,6 +24,7 @@ public static class AttemptEndpoints
     private static readonly Dictionary<string, string> EvidenceTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         ["image/jpeg"] = ".jpg", ["image/png"] = ".png", ["audio/wav"] = ".wav", ["audio/x-wav"] = ".wav",
+        ["audio/webm"] = ".webm", // browsers record Opus in WebM (web exams)
     };
 
     public static void MapAttempts(this IEndpointRouteBuilder api)
@@ -153,7 +154,7 @@ public static class AttemptEndpoints
         new Validator()
             .Rule(Enum.TryParse<EvidenceKind>(kind, ignoreCase: true, out _), "kind", "Kind must be ReferenceFace, Webcam, Screenshot or Audio.")
             .Rule(file.Length is > 0 and <= MaxEvidenceBytes, "file", "File must be between 1 byte and 10 MB.")
-            .Rule(extension is not null, "file", "Only JPEG, PNG and WAV files are accepted.")
+            .Rule(extension is not null, "file", "Only JPEG, PNG, WAV and WebM files are accepted.")
             .ThrowIfInvalid();
 
         await using var content = file.OpenReadStream();

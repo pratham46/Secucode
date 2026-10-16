@@ -115,6 +115,8 @@ public sealed class AttemptTests(ApiFixture api)
 
         var detail = await (await student.GetAsync($"/api/attempts/{attempt.Id}")).ReadAsync<AttemptDetailDto>();
         Assert.Equal("print('नमस्ते 🙂')", detail.Attempt.Code); // utf8mb4 round-trip
+        Assert.Null(attempt.LastSavedAt);
+        Assert.NotNull(detail.Attempt.LastSavedAt);                // the web client compares its local copy against this
         Assert.Equal(1, detail.Attempt.Strikes);                  // AudioUnavailable isn't a strike
         Assert.Equal(2, detail.Events.Count);
 
@@ -191,6 +193,24 @@ public sealed class AttemptTests(ApiFixture api)
             file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
             return new MultipartFormDataContent { { new StringContent(kind), "kind" }, { file, "file", "capture.bin" } };
         }
+    }
+
+    [Fact]
+    public async Task Browser_audio_in_webm_is_accepted_as_evidence()
+    {
+        var x = await SetupAsync();
+        var student = await _world.LoginAsync(x.Student, ClientKind.Web);
+        var attempt = await (await Start(student, x.ExamId)).ReadAsync<AttemptDto>(HttpStatusCode.Created);
+        var webm = new byte[] { 0x1A, 0x45, 0xDF, 0xA3, 1, 2, 3 };
+        var file = new ByteArrayContent(webm);
+        file.Headers.ContentType = new MediaTypeHeaderValue("audio/webm");
+        var form = new MultipartFormDataContent { { new StringContent("Audio"), "kind" }, { file, "file", "chunk.webm" } };
+
+        var evidence = await (await student.PostAsync($"/api/attempts/{attempt.Id}/evidence", form)).ReadAsync<EvidenceDto>(HttpStatusCode.Created);
+
+        Assert.Equal("audio/webm", evidence.ContentType);
+        var author = await _world.LoginAsync(x.Author);
+        Assert.Equal(webm, await (await author.GetAsync($"/api/evidence/{evidence.Id}")).Content.ReadAsByteArrayAsync());
     }
 
     [Fact]

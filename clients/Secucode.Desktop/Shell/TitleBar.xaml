@@ -1,0 +1,16 @@
+<UserControl x:Class="Secucode.Desktop.Shell.TitleBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Height="40">
+    <DockPanel Background="Transparent">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
+            <Button Style="{StaticResource CaptionButton}" Content="&#xE921;" Click="Minimize_Click" ToolTip="Minimize"/>
+            <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButton}" Content="&#xE922;" Click="Maximize_Click" ToolTip="Maximize"/>
+            <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Close"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0">
+            <Image Source="/secucode.ico" Width="16" Height="16" Margin="0,0,10,0"/>
+            <TextBlock Text="SecuCode" Style="{StaticResource Caption}"/>
+        </StackPanel>
+    </DockPanel>
+</UserControl>

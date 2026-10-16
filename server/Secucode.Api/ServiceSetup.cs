@@ -26,6 +26,16 @@ public static class ServiceSetup
         services.TryAddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
         services.AddProblemDetails();
+        // MediaPipe's face model is a .tflite file, which the default type map doesn't know (unknown types aren't served).
+        var types = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+        types.Mappings[".tflite"] = "application/octet-stream";
+        services.Configure<StaticFileOptions>(o => o.ContentTypeProvider = types);
+        services.Configure<StaticFileOptions>(o => o.OnPrepareResponse = ctx =>
+        {
+            ctx.Context.Response.Headers.ContentSecurityPolicy = WebApp.ContentSecurityPolicy;
+            if (ctx.File.Name == "index.html")
+                ctx.Context.Response.Headers.CacheControl = "no-cache"; // hashed assets can cache; the page that names them can't
+        });
         services.AddDbContext<AppDbContext>(o => o.UseMySql(config.GetConnectionString("Default"), DatabaseSetup.ServerVersion));
         services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         services.AddCors(o => o.AddDefaultPolicy(p => p
@@ -109,6 +119,7 @@ public static class ServiceSetup
         app.UseExceptionHandler();
         app.UseStatusCodePages();
         app.UseApiErrors();
+        app.UseWebApp();
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();

@@ -1,0 +1,54 @@
+.shell { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; transition: grid-template-columns var(--dur-page) var(--ease-out); }
+.shell.collapsed { grid-template-columns: 56px 1fr; }
+.sidebar {
+  position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 8px;
+  padding: 8px; background: var(--surface-sunken); border-right: 1px solid var(--border); overflow: hidden;
+}
+.brand { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+.brand-name { font-weight: 600; font-size: 16px; white-space: nowrap; }
+.nav { position: relative; display: grid; gap: 2px; }
+.nav-item {
+  position: relative; display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 10px;
+  border-radius: var(--radius); color: var(--text-primary); text-decoration: none; white-space: nowrap;
+  transition: background-color var(--dur-fast);
+}
+.nav-item:hover { background: var(--subtle-hover); }
+.nav-item.active { background: var(--subtle-hover); font-weight: 600; }
+.nav-icon { flex: none; }
+.nav-indicator {
+  position: absolute; left: 0; top: 0; width: 3px; border-radius: 2px; background: var(--accent);
+  transition: transform var(--dur-page) var(--ease-out), height var(--dur-page) var(--ease-out);
+}
+.sidebar-user { margin-top: auto; padding: 8px 10px; color: var(--text-secondary); font-size: var(--fs-caption); white-space: nowrap; }
+.collapsed .nav-label, .collapsed .brand-name { display: none; }
+.content { min-width: 0; padding: 32px; }
+.page { max-width: 1200px; margin: 0 auto; display: grid; gap: 20px; animation: page-in var(--dur-page) var(--ease-out); }
+.page-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.page-header .title { flex: 1; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+
+.login-page { display: grid; place-items: center; min-height: 100vh; padding: 16px; }
+.login-card { width: min(380px, 100%); display: grid; gap: 16px; animation: pop-in var(--dur-pop) var(--ease-out); }
+
+@media (max-width: 899px) {
+  .content { padding: 16px; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+.question-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+@media (max-width: 899px) { .question-row { grid-template-columns: 1fr; } }
+
+.code-editor { height: 100%; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.code-box { height: 360px; }
+/* ponytail: basicSetup's highlight colours are for light backgrounds, and a dark HighlightStyle needs
+   @codemirror/language, which is not on the package list; invert + hue-rotate keeps each hue but lightens it. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cm-line > span { filter: invert(1) hue-rotate(180deg); } }
+:root[data-theme="dark"] .cm-line > span { filter: invert(1) hue-rotate(180deg); }
+.question-text { white-space: pre-wrap; }
+.evidence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.evidence { margin: 0; display: grid; gap: 6px; }
+.evidence img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-sunken); }
+.evidence audio { width: 100%; }
+
+.exam-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.exam-card { display: grid; gap: 12px; align-content: start; }

@@ -1,0 +1,110 @@
+/* Design tokens shared with the desktop app. Components use only these variables. */
+:root {
+  --surface: #F6F6F8;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #EEEEF2;
+  --border: #E2E2E8;
+  --border-strong: #C6C6D0;
+  --text-primary: #1A1A1F;
+  --text-secondary: #5D5D69;
+  --text-disabled: #A2A2AC;
+  --accent: #2B5FD9;
+  --accent-hover: #2452C0;
+  --accent-pressed: #1E45A3;
+  --accent-soft: #E6EDFC;
+  --on-accent: #FFFFFF;
+  --danger: #C8322B;
+  --danger-soft: #FBE9E8;
+  --warning: #A65F0A;
+  --warning-soft: #FDF1DE;
+  --success: #1F8A4C;
+  --success-soft: #E3F4EA;
+  --focus: #2B5FD9;
+  --subtle-hover: rgb(0 0 0 / 0.06);
+  --subtle-pressed: rgb(0 0 0 / 0.11);
+
+  --font: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-code: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --fs-caption: 12px;
+  --fs-body: 14px;
+  --fs-subtitle: 20px;
+  --fs-title: 28px;
+  --fs-display: 40px;
+
+  --radius: 8px;
+  --radius-card: 12px;
+
+  --dur-fast: 100ms;
+  --dur-pop: 150ms;
+  --dur-page: 200ms;
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #1B1B1F;
+    --surface-raised: #25252B;
+    --surface-sunken: #151518;
+    --border: #33333B;
+    --border-strong: #4A4A55;
+    --text-primary: #F1F1F4;
+    --text-secondary: #A9A9B5;
+    --text-disabled: #686872;
+    --accent: #6E9BFF;
+    --accent-hover: #86ACFF;
+    --accent-pressed: #5A86E8;
+    --accent-soft: #24304D;
+    --on-accent: #0D1220;
+    --danger: #FF7B72;
+    --danger-soft: #3D2423;
+    --warning: #F2B45A;
+    --warning-soft: #3B2F1C;
+    --success: #5CD08A;
+    --success-soft: #1E3527;
+    --focus: #86ACFF;
+    --subtle-hover: rgb(255 255 255 / 0.08);
+    --subtle-pressed: rgb(255 255 255 / 0.14);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface: #1B1B1F;
+  --surface-raised: #25252B;
+  --surface-sunken: #151518;
+  --border: #33333B;
+  --border-strong: #4A4A55;
+  --text-primary: #F1F1F4;
+  --text-secondary: #A9A9B5;
+  --text-disabled: #686872;
+  --accent: #6E9BFF;
+  --accent-hover: #86ACFF;
+  --accent-pressed: #5A86E8;
+  --accent-soft: #24304D;
+  --on-accent: #0D1220;
+  --danger: #FF7B72;
+  --danger-soft: #3D2423;
+  --warning: #F2B45A;
+  --warning-soft: #3B2F1C;
+  --success: #5CD08A;
+  --success-soft: #1E3527;
+  --focus: #86ACFF;
+  --subtle-hover: rgb(255 255 255 / 0.08);
+  --subtle-pressed: rgb(255 255 255 / 0.14);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-pop: 0ms; --dur-page: 0ms; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: var(--fs-body) / 1.43 var(--font);
+}

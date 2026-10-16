@@ -4,7 +4,7 @@ public sealed record StartAttemptRequest(string Pin);
 
 public sealed record AttemptDto(int Id, int ExamId, int StudentId, int AttemptNumber, string QuestionText, AttemptStatus Status, ClientKind Client,
     DateTime StartedAt, DateTime DeadlineAt, DateTime? SubmittedAt, string? Language, string Code, int Strikes, string? SubmitReason,
-    DateTime ServerTime);
+    DateTime ServerTime, DateTime? LastSavedAt);
 
 public sealed record AttemptEventDto(long Id, AttemptEventType Type, DateTime OccurredAt, string? Detail, long? EvidenceId);
 

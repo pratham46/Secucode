@@ -6,6 +6,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-secucode-root}
       MYSQL_DATABASE: secucode_api
+    ports:
+      - "127.0.0.1:3307:3306"   # MySQL Workbench / local tools only; 3306 is often taken by a local MySQL
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:

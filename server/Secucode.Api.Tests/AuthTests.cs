@@ -156,4 +156,18 @@ public sealed class AuthTests(ApiFixture api)
         Assert.Equal(1, results.Count(r => r.StatusCode == HttpStatusCode.OK));
         Assert.Equal(1, results.Count(r => r.StatusCode == HttpStatusCode.Unauthorized));
     }
+
+    [Fact]
+    public async Task Me_marks_student_assignments()
+    {
+        var s = await _world.SectionAsync();
+        var student = await _world.UserAsync(RoleNames.Student, s.Batch);
+        var faculty = await _world.UserAsync(RoleNames.Faculty, s.Department);
+
+        var studentMe = await (await (await _world.LoginAsync(student)).GetAsync("/api/auth/me")).ReadAsync<MeResponse>();
+        var facultyMe = await (await (await _world.LoginAsync(faculty)).GetAsync("/api/auth/me")).ReadAsync<MeResponse>();
+
+        Assert.True(Assert.Single(studentMe.User.Assignments).IsStudent);
+        Assert.False(Assert.Single(facultyMe.User.Assignments).IsStudent);
+    }
 }
