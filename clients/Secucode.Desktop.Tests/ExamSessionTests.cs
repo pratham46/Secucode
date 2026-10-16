@@ -24,7 +24,7 @@ public sealed class ExamSessionTests : IAsyncLifetime
     }
 
     private static AttemptDto Attempt(AttemptStatus status = AttemptStatus.InProgress, DateTime? deadline = null) =>
-        new(3, 1, 2, 1, "Reverse a string", status, ClientKind.Desktop, Now, deadline ?? Now.AddMinutes(30), null, "Python", "", 0, null, Now);
+        new(3, 1, 2, 1, "Reverse a string", status, ClientKind.Desktop, Now, deadline ?? Now.AddMinutes(30), null, "Python", "", 0, null, Now, null);
 
     private ExamSession New() => new(Attempt(), _outbox, () => Now);
 
