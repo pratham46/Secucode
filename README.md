@@ -57,6 +57,8 @@ Demo logins: `superadmin / Admin@123`, `hod.cse / Hod@123`, `faculty.cse / Facul
 
 > **Warning:** in Production, seeding refuses to run unless `Seed__AdminPassword` (the `superadmin` password) is set in `.env`. The other demo accounts (`hod.cse`, `faculty.cse`, `student1`, `student2`) still use the published demo passwords, and there is no change-password endpoint yet: have the Super Admin reset them via `reset-password`, or deactivate them, before real use.
 
+**One-click test run:** double-click `start-all.cmd` (Docker Desktop installed). It creates `.env` if missing, starts MySQL + API with `docker compose`, seeds demo data, opens the web app at `http://localhost:8080` and starts the desktop app. MySQL is published on `127.0.0.1:3307` (user `root`, password from `MYSQL_ROOT_PASSWORD`, default `secucode-root`) for MySQL Workbench.
+
 **Live client contract:** SignalR runs `OnConnectedAsync` (joining the user's group) after the client's `start` returns, and pushes sent while a client is disconnected are lost. After every `connected` or `reconnected`, clients must re-read `GET /attempts/{id}` (it returns `DeadlineAt` and `ServerTime`); clients should also make refresh single-flight.
 
 **Tests** (Docker Desktop must be running; `python` and `node` on PATH):
