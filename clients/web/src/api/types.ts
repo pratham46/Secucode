@@ -60,7 +60,7 @@ export interface StudentExamDto {
 export interface AttemptDto {
   id: number; examId: number; studentId: number; attemptNumber: number; questionText: string;
   status: AttemptStatus; client: ClientKind; startedAt: string; deadlineAt: string; submittedAt: string | null;
-  language: string | null; code: string; strikes: number; submitReason: string | null; serverTime: string;
+  language: string | null; code: string; strikes: number; submitReason: string | null; serverTime: string; lastSavedAt: string | null;
 }
 
 export interface AttemptEventDto { id: number; type: AttemptEventType; occurredAt: string; detail: string | null; evidenceId: number | null }

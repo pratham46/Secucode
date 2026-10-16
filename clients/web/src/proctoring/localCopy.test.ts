@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AttemptDto } from '../api/types';
 import { clearLocal, loadLocal, pickCode, saveLocal } from './localCopy';
 
-const attempt = (over: Partial<AttemptDto> = {}) => ({ code: 'server', language: 'Java', ...over }) as AttemptDto;
+const attempt = (over: Partial<AttemptDto> = {}) => ({ code: 'server', language: 'Java', serverTime: '2026-01-01T10:00:00Z', lastSavedAt: null, ...over }) as AttemptDto;
 
 describe('local copy', () => {
   it('prefers the local copy, else the server code with a known language', () => {
@@ -15,6 +15,15 @@ describe('local copy', () => {
 
     clearLocal(3);
     expect(loadLocal(3)).toBeNull();
+  });
+
+  it('uses the local copy only when it is newer than the server save, on the server clock', () => {
+    const now = Date.parse('2026-01-01T10:00:00Z');
+    const local = { code: 'local', language: 'C++' as const, savedAt: now - 60_000 }; // saved 09:59 server time
+    const at = (lastSavedAt: string, clockSkewMs = 0) => pickCode(attempt({ lastSavedAt }), local, now + clockSkewMs).code;
+    expect(at('2026-01-01T09:58:00Z')).toBe('local');
+    expect(at('2026-01-01T09:59:30Z')).toBe('server');
+    expect(at('2026-01-01T09:58:00Z', 5 * 60_000)).toBe('server'); // computer clock 5 min ahead: the copy is really older
   });
 
   it('ignores a corrupt local copy', () => {

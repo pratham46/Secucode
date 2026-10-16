@@ -115,6 +115,8 @@ public sealed class AttemptTests(ApiFixture api)
 
         var detail = await (await student.GetAsync($"/api/attempts/{attempt.Id}")).ReadAsync<AttemptDetailDto>();
         Assert.Equal("print('नमस्ते 🙂')", detail.Attempt.Code); // utf8mb4 round-trip
+        Assert.Null(attempt.LastSavedAt);
+        Assert.NotNull(detail.Attempt.LastSavedAt);                // the web client compares its local copy against this
         Assert.Equal(1, detail.Attempt.Strikes);                  // AudioUnavailable isn't a strike
         Assert.Equal(2, detail.Events.Count);
 

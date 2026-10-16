@@ -30,9 +30,10 @@ export function clearLocal(attemptId: number): void {
   }
 }
 
-// ponytail: this browser is the only one writing this attempt's code, so its copy is never older than the
-// server's; prefer it. A student switching browsers mid-attempt has no local copy and gets the server's.
-export function pickCode(attempt: AttemptDto, local: LocalCopy | null): { code: string; language: Language } {
-  if (local) return { code: local.code, language: local.language };
+// The local copy wins only if it was saved after the server's last save. Its time is moved onto the server's
+// clock (using the attempt's serverTime read just now) so a wrong computer clock doesn't decide it.
+export function pickCode(attempt: AttemptDto, local: LocalCopy | null, now = Date.now()): { code: string; language: Language } {
+  const localAt = local ? local.savedAt + (Date.parse(attempt.serverTime) - now) : 0;
+  if (local && (attempt.lastSavedAt === null || localAt > Date.parse(attempt.lastSavedAt))) return { code: local.code, language: local.language };
   return { code: attempt.code, language: isLanguage(attempt.language) ? attempt.language : 'Python' };
 }
