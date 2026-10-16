@@ -43,12 +43,18 @@ test('reloading mid-exam keeps the code and resumes', async ({ page }) => {
   await signIn(page, 'student1', 'Student@123');
   await startExam(page, title);
   await typeCode(page, 'x = 41');
-  await page.waitForTimeout(1500); // the local copy is written 1 s after the last keystroke
+  await page.evaluate(() => document.exitFullscreen());
+  await page.getByRole('button', { name: 'Return to fullscreen' }).click();
+  await expect(page.getByText('Left exam: 1 of 3')).toBeVisible();
+  const localCode = () => page.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith('secucode.code.'))?.[1] ?? '');
+  await expect.poll(localCode).toContain('x = 41'); // the local copy is written 1 s after the last keystroke
 
   await page.reload();
   await expect(page.getByText('Face detected.')).toBeVisible();
   await page.getByRole('button', { name: 'Resume exam' }).click();
   await expect(page.getByLabel('Your code')).toContainText('x = 41');
+  // The strike survived (1) and the reload itself left fullscreen, which is a second trip.
+  await expect(page.getByText('Left exam: 2 of 3')).toBeVisible();
 });
 
 test('leaving fullscreen three times submits the exam', async ({ page }) => {
@@ -76,14 +82,18 @@ test('three failed face checks in a row submit the exam', async ({ page }) => {
   await submitted(page);
 });
 
-test('a submit made offline goes through when the connection returns', async ({ page, context }) => {
+test('work done offline is kept and sent when the connection returns', async ({ page, context }) => {
   const title = `E2E offline ${Date.now()}`;
   const exam = await createExam(title, 'WebAllowed');
   await signIn(page, 'student2', 'Student@123');
   await startExam(page, title);
-  await typeCode(page, 'print("offline")');
+  await typeCode(page, 'print("online")');
 
   await context.setOffline(true);
+  await page.keyboard.type('\nprint("offline-typed")');
+  await page.evaluate(() => document.exitFullscreen()); // the event can't be sent, so the queue notices it is offline
+  await page.getByRole('button', { name: 'Return to fullscreen' }).click();
+  await expect(page.getByText('Your work is kept in this tab and will be sent when the connection returns.')).toBeVisible();
   await submitExam(page);
   await expect(page.getByText('Your code will be submitted when the connection returns.')).toBeVisible();
   await context.setOffline(false);
@@ -91,7 +101,8 @@ test('a submit made offline goes through when the connection returns', async ({ 
 
   const faculty = await apiAs('faculty.cse', 'Faculty@123');
   const [attempt] = (await (await faculty.get(`/api/exams/${exam.id}/attempts`)).json()) as { id: number }[];
-  const detail = (await (await faculty.get(`/api/attempts/${attempt.id}`)).json()) as { attempt: { code: string; status: string } };
+  const detail = (await (await faculty.get(`/api/attempts/${attempt.id}`)).json()) as { attempt: { code: string; status: string }; events: { type: string }[] };
   expect(detail.attempt.status).toBe('Submitted');
-  expect(detail.attempt.code).toContain('offline');
+  expect(detail.attempt.code).toContain('offline-typed');
+  expect(detail.events.map(e => e.type)).toContain('FullscreenExited');
 });
