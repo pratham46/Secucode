@@ -6,7 +6,7 @@ import type { AttemptDetailDto, AttemptDto, StudentExamDto } from '../../api/typ
 import { useAuth } from '../../auth/AuthContext';
 import { uploadEvidence } from '../../proctoring/attemptQueue';
 import { captureJpeg, classify, countFaces } from '../../proctoring/faceMonitor';
-import { browserProblem, cameraProblem, hasAudio, openMedia } from '../../proctoring/media';
+import { browserProblem, cameraProblem, enterFullscreen, hasAudio, openMedia } from '../../proctoring/media';
 import type { FaceResult } from '../../proctoring/strikes';
 import { Button, Card, ErrorBar, InfoBar, TextField } from '../../ui';
 import { inProgressId } from './studentExams';
@@ -71,7 +71,7 @@ export function ExamStartPage() {
     setBusy(true);
     setError(null);
     try {
-      await document.documentElement.requestFullscreen(); // browsers allow this only straight after a click
+      await enterFullscreen(); // browsers allow this only straight after a click
     } catch {
       setBusy(false);
       setError(new ApiError(-1, 'Fullscreen was blocked.', 'Allow fullscreen for this site, then try again.'));

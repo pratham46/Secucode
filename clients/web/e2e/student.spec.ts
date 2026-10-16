@@ -57,6 +57,18 @@ test('reloading mid-exam keeps the code and resumes', async ({ page }) => {
   await expect(page.getByText('Left exam: 2 of 3')).toBeVisible();
 });
 
+test('browser Back stays on the exam and counts as leaving', async ({ page }) => {
+  const title = `E2E back ${Date.now()}`;
+  await createExam(title, 'WebAllowed');
+  await signIn(page, 'student1', 'Student@123');
+  await startExam(page, title);
+
+  await page.goBack();
+  await expect(page.getByText('Left exam: 1 of 3')).toBeVisible();
+  await expect(page).toHaveURL(/\/attempt\/\d+$/);
+  await expect(page.getByLabel('Your code')).toBeVisible();
+});
+
 test('leaving fullscreen three times submits the exam', async ({ page }) => {
   const title = `E2E fullscreen ${Date.now()}`;
   await createExam(title, 'WebAllowed');

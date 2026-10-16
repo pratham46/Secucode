@@ -3,12 +3,17 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { Button, ErrorBar, InfoBar, TextField } from '../../ui';
 
+// Only same-site paths: "//host" and "http:..." would send the student somewhere else after sign-in.
+export function returnPath(from: string | undefined): string {
+  return from && from.startsWith('/') && !from.startsWith('//') && from !== '/login' ? from : '/exams';
+}
+
 export function LoginPage() {
   const { login, session, expired } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as { from?: string; expired?: boolean } | null;
-  const from = state?.from && state.from !== '/login' ? state.from : '/exams';
+  const from = returnPath(state?.from);
   const [username, setUsername] = useState(session?.user.username ?? '');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);

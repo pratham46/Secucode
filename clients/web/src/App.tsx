@@ -12,11 +12,12 @@ import { ExamPage } from './features/student/ExamPage';
 import { ExamStartPage } from './features/student/ExamStartPage';
 import { SettingsPage } from './features/settings/SettingsPage';
 import { AppShell } from './shell/AppShell';
+import { PageErrorBoundary } from './shell/PageErrorBoundary';
 
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
   // Full-screen routes without the shell.
-  { path: '/attempt/:id', element: <RequireAuth keepOnExpiry><StudentOnly><ExamPage /></StudentOnly></RequireAuth> },
+  { path: '/attempt/:id', element: <RequireAuth keepOnExpiry><StudentOnly><PageErrorBoundary><ExamPage /></PageErrorBoundary></StudentOnly></RequireAuth> },
   {
     element: <RequireAuth><AppShell /></RequireAuth>,
     children: [

@@ -5,7 +5,11 @@ export function currentMedia(): MediaStream | null {
   return current;
 }
 
+// Bumped by every close, so a getUserMedia still pending when the exam ends can tell and stop its late stream.
+let generation = 0;
+
 export function closeMedia(): void {
+  generation++;
   current?.getTracks().forEach(t => t.stop());
   current = null;
 }
@@ -25,12 +29,26 @@ export function openMedia(): Promise<MediaStream> {
 async function open(): Promise<MediaStream> {
   closeMedia();
   const video = { width: { ideal: 640 }, height: { ideal: 480 } };
+  const mine = generation;
+  let stream: MediaStream;
   try {
-    current = await navigator.mediaDevices.getUserMedia({ video, audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
   } catch {
-    current = await navigator.mediaDevices.getUserMedia({ video });
+    stream = await navigator.mediaDevices.getUserMedia({ video });
   }
-  return current;
+  if (mine !== generation) {
+    stream.getTracks().forEach(t => t.stop()); // closeMedia() ran while the browser was still asking
+    throw new DOMException('The camera was closed before it started.', 'AbortError');
+  }
+  return (current = stream);
+}
+
+// Fullscreen, plus (Chrome/Edge) keeping Esc from leaving it: a reflex Esc in the editor or a dialog would be a strike.
+// Throws if fullscreen is refused; a refused keyboard lock is ignored.
+export async function enterFullscreen(): Promise<void> {
+  await document.documentElement.requestFullscreen();
+  const keyboard = (navigator as Navigator & { keyboard?: { lock?(keys: string[]): Promise<void> } }).keyboard;
+  await keyboard?.lock?.(['Escape']).catch(() => {});
 }
 
 export function browserProblem(): string | null {

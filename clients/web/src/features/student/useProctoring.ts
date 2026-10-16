@@ -4,7 +4,7 @@ import { AudioRecorder } from '../../proctoring/audioRecorder';
 import { captureJpeg, classify, countFaces } from '../../proctoring/faceMonitor';
 import { watchFocus } from '../../proctoring/focusGuard';
 import { currentMedia, hasAudio } from '../../proctoring/media';
-import { loadStrikes, saveStrikes, StrikeCounter, type StrikeState } from '../../proctoring/strikes';
+import { loadStrikes, saveStrikes, StrikeCounter, type LeaveSignal, type StrikeState } from '../../proctoring/strikes';
 
 const FACE_CHECK_MS = 3000;
 
@@ -16,13 +16,14 @@ export function useProctoring({ attemptId, video, active, report, onAutoSubmit }
   active: boolean;
   report(item: QueueItem): void;
   onAutoSubmit(reason: string): void;
-}): { fullscreen: boolean; strikes: StrikeState } {
+}): { fullscreen: boolean; strikes: StrikeState; trip(): void } {
   const [fullscreen, setFullscreen] = useState(() => document.fullscreenElement !== null);
   const [strikes, setStrikes] = useState<StrikeState>(() => loadStrikes(attemptId));
   const reportRef = useRef(report);
   reportRef.current = report;
   const autoSubmitRef = useRef(onAutoSubmit);
   autoSubmitRef.current = onAutoSubmit;
+  const tripRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (!active) return;
@@ -32,13 +33,17 @@ export function useProctoring({ attemptId, video, active, report, onAutoSubmit }
       setStrikes({ ...counter.state });
     };
 
-    const stopFocus = watchFocus(signal => {
+    let stopped = false;
+    const leave = (signal: LeaveSignal) => {
       const o = counter.leave(signal);
       if (!o.event) return;
       changed();
       reportRef.current({ kind: 'event', type: o.event });
       if (o.autoSubmit) autoSubmitRef.current(o.autoSubmit);
-    }, () => counter.back());
+    };
+    const stopFocus = watchFocus(leave, () => counter.back());
+    // Browser Back is blocked and counted as one trip; the student never left the page, so the next trip counts too.
+    tripRef.current = () => { leave('FocusLost'); counter.back(); };
 
     const onFullscreen = () => setFullscreen(document.fullscreenElement !== null);
     document.addEventListener('fullscreenchange', onFullscreen);
@@ -51,10 +56,13 @@ export function useProctoring({ attemptId, video, active, report, onAutoSubmit }
       checking = true;
       try {
         const before = counter.state.faceRun;
-        const o = counter.face(classify(await countFaces(v)));
+        const faces = await countFaces(v);
+        if (stopped) return;
+        const o = counter.face(classify(faces));
         if (counter.state.faceRun !== before) changed();
         if (o.event) {
           const frame = await captureJpeg(v);
+          if (stopped) return;
           reportRef.current({ kind: 'event', type: o.event, evidence: frame ? { kind: 'Webcam', blob: frame } : undefined });
           if (o.autoSubmit) autoSubmitRef.current(o.autoSubmit);
         }
@@ -79,6 +87,8 @@ export function useProctoring({ attemptId, video, active, report, onAutoSubmit }
     } else noAudio('No microphone, or microphone access was blocked.');
 
     return () => {
+      stopped = true;
+      tripRef.current = () => {};
       stopFocus();
       document.removeEventListener('fullscreenchange', onFullscreen);
       clearInterval(faceTimer);
@@ -88,5 +98,5 @@ export function useProctoring({ attemptId, video, active, report, onAutoSubmit }
     };
   }, [active, attemptId, video]);
 
-  return { fullscreen, strikes };
+  return { fullscreen, strikes, trip: () => tripRef.current() };
 }

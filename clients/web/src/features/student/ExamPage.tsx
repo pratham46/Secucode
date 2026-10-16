@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useBlocker, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { connectLive } from '../../api/live';
 import { LANGUAGES, type AttemptDetailDto, type AttemptDto, type Language, type RunResult } from '../../api/types';
@@ -7,7 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { apiSender, AttemptQueue, type QueueItem } from '../../proctoring/attemptQueue';
 import { captureJpeg } from '../../proctoring/faceMonitor';
 import { clearLocal, loadLocal, pickCode, saveLocal } from '../../proctoring/localCopy';
-import { closeMedia, currentMedia } from '../../proctoring/media';
+import { closeMedia, currentMedia, enterFullscreen } from '../../proctoring/media';
 import { clearStrikes, loadStrikes, MAX_STRIKES } from '../../proctoring/strikes';
 import { clockOffset, formatRemaining, remainingMs, submitWindowOver } from '../../proctoring/timer';
 import { Button, Card, ErrorBar, InfoBar, Select, Spinner } from '../../ui';
@@ -30,7 +30,8 @@ const CLOSED = 'This exam is closed.';
 const closedMessage = (a: AttemptDto) =>
   a.status === 'Voided' ? 'Staff voided this attempt. Ask them what to do next.'
     : a.status === 'AutoSubmitted' ? `The server submitted your last saved code (${a.submitReason ?? 'the deadline passed'}).`
-      : 'This attempt has already been submitted.';
+      : a.status === 'InProgress' ? 'Time is up; the server will submit your last saved code.'
+        : 'This attempt has already been submitted.';
 
 const block = (e: { preventDefault(): void }) => e.preventDefault();
 
@@ -48,6 +49,7 @@ export function ExamPage() {
   const video = useRef<HTMLVideoElement>(null);
   const queue = useRef<AttemptQueue | null>(null);
   const finishing = useRef(false);
+  const ended = useRef(false);
   const latest = useRef({ code: '', language: 'Python' as Language, saved: '' });
 
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -62,10 +64,17 @@ export function ExamPage() {
   const [confirming, setConfirming] = useState(false);
 
   const end = useCallback((heading: string, message: string) => {
+    ended.current = true;
     queue.current?.close();
     leaveExam();
     setPhase({ kind: 'done', title: heading, message });
   }, []);
+
+  // The attempt is over on the server: this browser's copy of the code is no longer needed.
+  const endClosed = useCallback((a: AttemptDto) => {
+    if (a.status !== 'InProgress') clearLocal(attemptId);
+    end(CLOSED, closedMessage(a));
+  }, [attemptId, end]);
 
   const fetchAttempt = useCallback(async () => {
     const { attempt } = await api.get<AttemptDetailDto>(`/api/attempts/${attemptId}`);
@@ -79,7 +88,7 @@ export function ExamPage() {
     const q = new AttemptQueue(apiSender(api, attemptId));
     q.onOfflineChange = setOffline;
     q.onClosed = () => {
-      fetchAttempt().then(a => end(CLOSED, closedMessage(a)), () => end(CLOSED, 'The server no longer accepts changes to this attempt.'));
+      fetchAttempt().then(endClosed, () => end(CLOSED, 'The server no longer accepts changes to this attempt.'));
     };
     q.onSubmitRejected = error =>
       end('Your submission was refused.', `${error.detail ?? error.title} The server will submit your last auto-saved code at the deadline.`);
@@ -96,7 +105,7 @@ export function ExamPage() {
       q.close();
       queue.current = null;
     };
-  }, [api, attemptId, fetchAttempt, end]);
+  }, [api, attemptId, fetchAttempt, end, endClosed]);
 
   const enqueue = useCallback((item: QueueItem) => queue.current?.enqueue(item), []);
 
@@ -107,7 +116,7 @@ export function ExamPage() {
       try {
         const attempt = await fetchAttempt();
         if (cancelled) return;
-        if (attempt.status !== 'InProgress') return end(CLOSED, closedMessage(attempt));
+        if (attempt.status !== 'InProgress') return endClosed(attempt);
         if (!currentMedia()) return navigate(`/exams/${attempt.examId}/start?resume=${attemptId}`, { replace: true });
         const picked = pickCode(attempt, loadLocal(attemptId));
         latest.current = { code: picked.code, language: picked.language, saved: `${attempt.language}\n${attempt.code}` };
@@ -120,13 +129,14 @@ export function ExamPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [attemptId, fetchAttempt, navigate, end]);
+  }, [attemptId, fetchAttempt, navigate, endClosed]);
 
   const finish = useCallback(async (reason: string) => {
     if (finishing.current) return; // timer, strikes and the button can all fire; only one submit
     finishing.current = true;
     setConfirming(false);
     const frame = video.current ? await captureJpeg(video.current) : null; // before the camera stops
+    if (ended.current) return; // the attempt ended (voided, 409) while the photo was being taken
     setPhase({ kind: 'submitting' });
     if (frame) enqueue({ kind: 'evidence', evidenceKind: 'Webcam', blob: frame });
     const l = latest.current;
@@ -134,7 +144,15 @@ export function ExamPage() {
   }, [enqueue]);
 
   const running = phase.kind === 'running';
-  const { fullscreen, strikes } = useProctoring({ attemptId, video, active: running, report: enqueue, onAutoSubmit: r => void finish(r) });
+  const { fullscreen, strikes, trip } = useProctoring({ attemptId, video, active: running, report: enqueue, onAutoSubmit: r => void finish(r) });
+
+  // Browser Back would leave the exam unrecorded: stay, and count it as leaving.
+  const blocker = useBlocker(() => phase.kind === 'running' || phase.kind === 'submitting');
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    blocker.reset();
+    trip();
+  }, [blocker, trip]);
 
   // A reload after the 3rd strike but before the submit landed: the counter only fires at exactly 3, so submit here.
   const strikesChecked = useRef(false);
@@ -156,9 +174,11 @@ export function ExamPage() {
     if (running && remaining === 0) void finish('Time up.');
   }, [running, remaining, finish]);
   useEffect(() => {
-    if (phase.kind === 'submitting' && deadline !== null && submitWindowOver(deadline, offset, now))
+    if (phase.kind === 'submitting' && deadline !== null && submitWindowOver(deadline, offset, now)) {
+      clearLocal(attemptId);
       end('The submit window has passed.', 'The connection did not come back in time. The server has submitted your last saved code.');
-  }, [phase.kind, deadline, offset, now, end]);
+    }
+  }, [phase.kind, deadline, offset, now, end, attemptId]);
 
   // Auto-save every 30 s when something changed; local copy 1 s after the last change.
   useEffect(() => {
@@ -183,11 +203,11 @@ export function ExamPage() {
     if (!running) return;
     return connectLive(api, {
       DeadlineChanged: m => { if (m.attemptId === attemptId) setDeadline(m.deadlineAt); },
-      AttemptVoided: m => { if (m.attemptId === attemptId) end(CLOSED, 'Staff voided this attempt. Ask them what to do next.'); },
+      AttemptVoided: m => { if (m.attemptId === attemptId) { clearLocal(attemptId); end(CLOSED, 'Staff voided this attempt. Ask them what to do next.'); } },
     }, () => {
-      fetchAttempt().then(a => { if (a.status !== 'InProgress' && !finishing.current) end(CLOSED, closedMessage(a)); }, () => {});
+      fetchAttempt().then(a => { if (a.status !== 'InProgress' && !finishing.current) endClosed(a); }, () => {});
     });
-  }, [running, api, attemptId, fetchAttempt, end]);
+  }, [running, api, attemptId, fetchAttempt, end, endClosed]);
 
   // Self-view.
   useEffect(() => {
@@ -275,7 +295,7 @@ export function ExamPage() {
             <h2 id="fs-title" className="subtitle">Return to fullscreen to continue</h2>
             <p>Leaving fullscreen counts as leaving the exam.</p>
             <div>
-              <Button variant="primary" onClick={() => void document.documentElement.requestFullscreen().catch(() => {})}>Return to fullscreen</Button>
+              <Button variant="primary" onClick={() => void enterFullscreen().catch(() => {})}>Return to fullscreen</Button>
             </div>
           </Card>
         </div>
